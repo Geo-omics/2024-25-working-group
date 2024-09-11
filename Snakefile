@@ -21,7 +21,7 @@ rule fastqc:
     input:
         reads = "data/fastqs/{SampleID}_{direction}.fastq.gz"
     output:
-        report = "data/fastqc/{SampleID}_{direction}.html"
+        report = "data/fastqc/{SampleID}_{direction}_fastqc.html"
     params:
         out_dir = "data/fastqc"
     conda:

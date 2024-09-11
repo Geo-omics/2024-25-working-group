@@ -2,32 +2,44 @@
 title: "R Notebook"
 output: html_notebook
 ---
-
+# Setup chunk 
+Automatically runs before other chunks
 ```{r setup, include=FALSE}
+# Set the working directory for the current notebook; only works properly if the notebook has been saved at least once
 knitr::opts_knit$set(root.dir = here::here("~/projects/2024_working_group/"))
 
+# Load packages
 library(tidyverse)
 
-set.seed(2022)
+set.seed(2022) # Not strictly needed here, but sets the random seed to make things that rely on it reproducible
+
+# Define which function to prefer in case of multiple functions with the same name
 conflicted::conflicts_prefer(dplyr::select(), dplyr::rename(), dplyr::filter())
 ```
 
+# Link fastq files from GLAMR for analysis
 ```{r}
-fastqs <- Sys.glob("/geomicro/data2/kiledal/GLAMR/data/omics/metagenomes/samp_447/reads/raw_*_reads.fastq.gz") %>% 
-  data.frame(path = .) %>% 
-  unglue::unglue_unnest(path, "/geomicro/data2/kiledal/GLAMR/data/omics/metagenomes/{SampleID}/reads/raw_{direction}_reads.fastq.gz", remove = FALSE) %>% 
-  mutate(new_path = str_glue("data/fastqs/{SampleID}_{direction}.fastq.gz"),
-         fastq_report_path = str_glue("data/fastqc/{SampleID}_{direction}.html"))
+fastqs <- Sys.glob("/geomicro/data2/kiledal/GLAMR/data/omics/metagenomes/samp_447/reads/raw_*_reads.fastq.gz") %>% # get a vector [think of it like a list] of files
+  data.frame(path = .) %>% # Make a dataframe with these files, in column called path
+  unglue::unglue_unnest(path, "/geomicro/data2/kiledal/GLAMR/data/omics/metagenomes/{SampleID}/reads/raw_{direction}_reads.fastq.gz", remove = FALSE) %>%  # Pull out parts of the file path while keeping the path column
+  mutate(new_path = str_glue("data/fastqs/{SampleID}_{direction}.fastq.gz"), # Add a new column where we want to link to
+         fastq_report_path = str_glue("data/fastqc/{SampleID}_{direction}_fastqc.html")) # Add targets for Snakemake to make
 
-fastqs$new_path %>% dirname() %>% unique() %>% fs::dir_create()
+# Create the directory to link files to
+fastqs$new_path %>% # Get just the vector of new paths
+  dirname() %>% # Remove the filename, only have the name of the directory where we want to make links
+  unique() %>% # Remove duplicate directories
+  fs::dir_create() # Create the directories
 
+# Create the links from your path to files in GLAMR
 fs::link_create(fastqs$path, fastqs$new_path)
 
+# Create a directory to contain lists of targets for Snakemake
 fs::dir_create("targets")
 
+# Write out a list of fastqc targets for Snakemake
 fastqs %>% 
   select(fastq_report_path) %>% 
   write_tsv("targets/fastqc",col_names = FALSE)
-  
 ```
 
