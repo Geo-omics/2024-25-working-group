@@ -1,0 +1,33 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = here::here("~/projects/2024_working_group/"))
+
+library(tidyverse)
+
+set.seed(2022)
+conflicted::conflicts_prefer(dplyr::select(), dplyr::rename(), dplyr::filter())
+```
+
+```{r}
+fastqs <- Sys.glob("/geomicro/data2/kiledal/GLAMR/data/omics/metagenomes/samp_447/reads/raw_*_reads.fastq.gz") %>% 
+  data.frame(path = .) %>% 
+  unglue::unglue_unnest(path, "/geomicro/data2/kiledal/GLAMR/data/omics/metagenomes/{SampleID}/reads/raw_{direction}_reads.fastq.gz", remove = FALSE) %>% 
+  mutate(new_path = str_glue("data/fastqs/{SampleID}_{direction}.fastq.gz"),
+         fastq_report_path = str_glue("data/fastqc/{SampleID}_{direction}.html"))
+
+fastqs$new_path %>% dirname() %>% unique() %>% fs::dir_create()
+
+fs::link_create(fastqs$path, fastqs$new_path)
+
+fs::dir_create("targets")
+
+fastqs %>% 
+  select(fastq_report_path) %>% 
+  write_tsv("targets/fastqc",col_names = FALSE)
+  
+```
+
