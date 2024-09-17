@@ -14,7 +14,7 @@ directions = glob_wildcards("data/fastqs/{SampleID}_{direction}.fastq.gz").direc
 
 # Create target rule for running fastqc
 rule run_fastqc:
-    input:  expand("data/fastqc/{SampleID}_{direction}/report.html", SampleID = samples, direction = directions)
+    input:  expand("data/fastqc/{SampleID}_{direction}_fastqc.html", SampleID = samples, direction = directions)
 
 # Rule for running fastqc
 rule fastqc:
@@ -26,8 +26,9 @@ rule fastqc:
         out_dir = "data/fastqc"
     conda:
         "config/conda/fastqc.yaml"
+    log: "logs/fastqc/{SampleID}_{direction}.log"
     resources: time_min = 1000, cpus = 8, mem_mb = 50000
     shell:
         """
-        fastqc -o {params.out_dir} -t {resources.cpus} {input.reads}
+        fastqc -o {params.out_dir} -t {resources.cpus} {input.reads} | tee {log}
         """
