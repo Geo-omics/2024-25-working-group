@@ -1,0 +1,73 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+```{r setup}
+library(tidyverse)
+library(ggmap)
+library(leaflet)
+library(sf)
+```
+
+Import data to plot
+```{r}
+coords <- read_csv("~/projects/2024_working_group/data/geo_maps/dd_cords_test_map_RM.csv") %>% 
+  janitor::clean_names()
+```
+```{r}
+coords %>% 
+  leaflet() %>% 
+  addTiles() %>% 
+  addCircleMarkers(lng = ~long, lat = ~lat, popup = ~station)
+```
+
+
+```{r}
+current_crs <- "4326"
+
+shp <- st_read("~/projects/2023_matthew_glamr/shapes_ks_great_lakes_all_full/great_lakes_us_ca.shp")
+
+lake_erie_shp <- shp %>% 
+  filter(NAME == "Lake Erie") %>% 
+  st_transform(crs = 4326)
+
+shp_points <- coords %>% 
+  st_as_sf(coords = c("long", "lat"), crs = 4326)
+
+# Limits of area to plot by two corner points
+plot_limits <- st_sfc(st_point(c(-83.7, 41.2)), st_point(c(-78.62, 43)),
+                         crs = 4326) %>% 
+  st_transform(crs = 4326) %>% 
+  st_coordinates()
+
+ggplot() +
+  geom_sf(data = lake_erie_shp, fill = "blue") +
+  geom_sf(data = shp_points, size = 4, aes(color = srp_ug_l)) +
+  scale_color_viridis_c() +
+  coord_sf(xlim = plot_limits[,'X'], ylim = plot_limits[,'Y'],
+             datum = 4326, expand = FALSE) +
+  theme_bw()
+
+```
+
+```{r}
+register_google("AIzaSyBee7uKFYMMb90wnke4LHFCIUPVTJQdnaE")
+
+ggmap(get_googlemap(center = c(lon = -83.326801, lat = 41.778739), zoom = 8, maptype = "terrain")) +
+  geom_point(data = coords,
+             aes(long,lat,color = srp_ug_l), alpha = 0.5, inherit.aes = FALSE) +
+  theme_bw() +
+  scale_color_viridis_c() #+
+  #coord_quickmap(xlim = c(-83.5, -78.586144), ylim = c(41.6, 43.084945))
+
+
+```
+
+
+
+
+
+
+
+
+
