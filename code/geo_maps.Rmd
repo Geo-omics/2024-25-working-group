@@ -14,6 +14,7 @@ Import data to plot
 coords <- read_csv("~/projects/2024_working_group/data/geo_maps/dd_cords_test_map_RM.csv") %>% 
   janitor::clean_names()
 ```
+## Leaflet to make interactive map
 ```{r}
 coords %>% 
   leaflet() %>% 
@@ -22,6 +23,7 @@ coords %>%
 ```
 
 
+## Using shapefiles to plot
 ```{r}
 current_crs <- "4326"
 
@@ -50,6 +52,7 @@ ggplot() +
 
 ```
 
+## Using Google maps as a map base
 ```{r}
 register_google("AIzaSyBee7uKFYMMb90wnke4LHFCIUPVTJQdnaE")
 
