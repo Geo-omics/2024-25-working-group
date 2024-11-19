@@ -1,0 +1,110 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r setup}
+knitr::opts_knit$set(root.dir = here::here("~/projects/202408_BoCP_proposal"))
+
+library(DBI)
+library(tidyverse)
+#library(parzer)
+library(sf)
+library(sp)
+library(patchwork)
+
+pg <- DBI::dbConnect(RPostgres::Postgres(),dbname = "glamr_data", host = "localhost", port = "5432", user = "glamr_admin", password = "glamr2023")
+
+conflicted::conflicts_prefer(dplyr::select(), dplyr::rename(), dplyr::filter())
+```
+
+
+
+```{r}
+
+current_crs <- "4326"
+
+shp <- st_read("~/projects/2023_matthew_glamr/shapes_ks_great_lakes_all_full/great_lakes_us_ca.shp")
+
+counties <- st_read("~/references/shape_files/michigan_counties/County.shp") %>% 
+  st_transform(crs = 4326)
+
+lake_counties <- counties %>% 
+  filter(Name %in% c("Kalamazoo", "Barry", "Allegan", "Van Buren", "Calhoun")) %>% 
+  st_transform(crs = 4326)
+
+
+lakes_shp <- shp %>% 
+  filter(NAME %in% c("Lawrence Lake", "Gull Lake", "Wintergreen Lake", "Swan Lake")) %>% 
+  group_by(NAME) %>% 
+  mutate(lake_w_num = str_glue("{NAME}_{row_number()}")) %>% 
+  filter(lake_w_num %in% c("Swan Lake_7", "Gull Lake_5", "Wintergreen Lake_2", "Lawrence Lake_5")) %>% 
+  st_transform(crs = 4326)
+
+elevation_data <- elevatr::get_elev_raster(locations = lake_counties, z = 7,clip = "locations")
+
+cropped_elev <- raster::crop(elevation_data, lake_counties)
+elevate <- raster::as.data.frame(cropped_elev, xy = TRUE)
+
+
+# Limits of area to plot by two corner points
+mi_plot_limits <- st_sfc(st_point(c(-86.99, 41.6)), st_point(c(-82.39, 45.84)),
+                         crs = 4326) %>% 
+  st_transform(crs = 4326) %>% 
+  st_coordinates()
+
+
+(mi_map <- ggplot() +
+  geom_sf(data = counties, color = "grey30", fill = "grey90") +
+  #geom_sf(data = lakes_shp, fill = "blue", aes(label = lake_w_num), color = "blue") +
+  theme_bw() +
+  geom_rect(aes(xmin = -86,xmax = -85.3, ymin= 42.2, ymax = 42.6), color = "red", fill = NA) + 
+  coord_sf(xlim = mi_plot_limits[,'X'], ylim = mi_plot_limits[,'Y'],
+             datum = 4326, expand = FALSE) + 
+    theme(axis.text.x = element_blank(),
+          axis.ticks.x = element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks.y = element_blank(),
+          panel.grid.major = element_blank(), 
+          panel.grid.minor = element_blank())
+)
+
+
+# Limits of area to plot by two corner points
+plot_limits <- st_sfc(st_point(c(-86, 42.2)), st_point(c(-85.3, 42.6)),
+                         crs = 4326) %>% 
+  st_transform(crs = 4326) %>% 
+  st_coordinates()
+
+(lakes_map <- ggplot() +
+  geom_sf(data = lake_counties, color = "grey30", fill = "grey90") +
+  #geom_raster(data = elevate, aes(x = x, y = y, fill = file3f8b2412cd079d)) +
+  geom_sf(data = lakes_shp, fill = "blue", aes(label = lake_w_num)) +
+  ggrepel::geom_label_repel(data = lakes_shp %>% filter(NAME %in% c("Wintergreen Lake", "Lawrence Lake")), aes(label = NAME, geometry = geometry), color = "grey30",stat = "sf_coordinates",
+                            nudge_y =  .075, nudge_x = -.1,
+                            point.padding = 0.5) +
+  ggrepel::geom_label_repel(data = lakes_shp %>% filter(NAME == "Gull Lake"), aes(label = NAME, geometry = geometry), color = "grey30",stat = "sf_coordinates",
+                            nudge_y =  - .075, nudge_x = -.1,
+                            point.padding = 0.5) +
+  ggrepel::geom_label_repel(data = lakes_shp %>% filter(NAME == "Swan Lake"), aes(label = NAME, geometry = geometry), color = "grey30",stat = "sf_coordinates",
+                            nudge_y = .05, nudge_x = .1,
+                            point.padding = 0.5) +
+  #geom_label(data = lake_counties, aes(label = Name,), color = "grey30") +
+  annotate(x = -85.9, y = 42.57, label = "Allegan County",geom = "text", alpha = 0.6) +
+  annotate(x = -85.4, y = 42.57, label = "Barry County",geom = "text", alpha = 0.6) +
+  annotate(x = -85.5, y = 42.25, label = "Kalamazoo County",geom = "text", alpha = 0.6) +
+  theme_bw() +
+  coord_sf(xlim = plot_limits[,'X'], ylim = plot_limits[,'Y'],
+             datum = 4326, expand = FALSE) +
+  ggspatial::annotation_scale(location = "br") +
+    labs(x = NULL, y = NULL)
+ 
+)
+
+
+lakes_map + inset_element(mi_map, left = 0.15, bottom = 0.05, right = 0.4, top = 0.6, align_to = 'full')
+ggsave("lakes_map.pdf",width = 4, height = 3, scale = 1.25)
+ggsave("lakes_map.png",width = 4, height = 3, scale = 1.25)
+
+```
+
