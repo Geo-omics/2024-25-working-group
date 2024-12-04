@@ -32,3 +32,37 @@ rule fastqc:
         """
         fastqc -o {params.out_dir} -t {resources.cpus} {input.reads} | tee {log}
         """
+
+rule fastp:
+    input:
+        fwd_reads: "data/fastqs/{SampleID}_fwd.fastq.gz",
+        rev_reads: "data/fastqs/{SampleID}_rev.fastq.gz"
+    output:
+
+    conda: "config/conda/fastp.yaml"
+    log:
+    resources:
+    shell: 
+        """
+        # First deduplicate
+        fastp \
+            -i {input.fwd_reads} -I {input.rev_reads} \
+            -o {output.tmp_fwd} -O {output.tmp_rev} \
+            -h {output.html_dedup} -j {output.json_dedup} \
+            --thread {resources.cpu} \
+            -z 3 \
+            --dedup \
+            --dedup_calc_accuracy 6 
+
+        # Trim and filter reads, remove adapters
+        fastp \
+         -i {output.tmp_fwd} -I {output.tmp_rev} \
+         -o {out.fwd_reads} -O {output.rev_reads} \
+         -h {output.html} -j {output.json} \
+         --thread {resources.cpu} \
+         -z 9 \
+         --length_required 50 \
+         --n_base_limit 5 \
+         
+
+        """
