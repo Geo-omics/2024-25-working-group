@@ -1,0 +1,74 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = here::here("~/projects/202501_CSP_metaT_selection"))
+library(tidyverse)
+library(googlesheets4)
+library(googledrive)
+library(DBI)
+
+conflicted::conflicts_prefer(dplyr::select(), dplyr::rename(), dplyr::filter(), dplyr::lag(),base::as.data.frame())
+
+# Open database connection
+pg <- DBI::dbConnect(RPostgres::Postgres(),dbname = "glamr_data", host = "cayman.earth.lsa.umich.edu", port = "5432", user = "glamr_admin", password = "glamr2023")
+```
+
+Read in read counts for a single file
+```{r}
+read_counts <- read_tsv("/geomicro/data2/kiledal/GLAMR/data/omics/metagenomes/samp_447/reads/E20150029_read_count_fastp.tsv")
+
+states <- c("raw_reads", "deduped_reads", "filt_and_trimmed_reads", "decon_reads")
+
+read_counts_augmented <- read_counts %>% 
+  pivot_longer(-read_state, names_to = "direction", values_to = "count") %>% 
+  mutate(direction = str_remove(direction, "_read_count"),
+         read_state = factor(read_state, levels = states, ordered = TRUE)) %>% 
+  arrange(direction, read_state) %>% 
+  group_by(direction) %>% 
+  mutate(percent_retained = count / lag(count) * 100,
+         percent_removed = 100 - percent_retained)
+```
+
+
+Read in read count files from multiple files
+```{r}
+# Get a list of read count files
+read_count_files <- Sys.glob("/geomicro/data2/kiledal/GLAMR/data/projects/GLERL_USGS_2016_2020/metagenomes/*/reads/*_read_count_fastp.tsv") %>% 
+  data.frame(path = .) %>% 
+  unglue::unglue_unnest(path, "/geomicro/data2/kiledal/GLAMR/data/projects/GLERL_USGS_2016_2020/metagenomes/{SampleID}/reads/{SampleID2}_read_count_fastp.tsv",remove = FALSE)
+
+import_read_counts <- function(path, sample_name){
+  read_counts <- read_tsv(path) %>% 
+    mutate(SampleID = sample_name)
+
+  states <- c("raw_reads", "deduped_reads", "filt_and_trimmed_reads", "decon_reads")
+
+  read_counts_augmented <- read_counts %>% 
+    pivot_longer(-c(read_state,SampleID), names_to = "direction", values_to = "count") %>% 
+    mutate(direction = str_remove(direction, "_read_count"),
+           read_state = factor(read_state, levels = states, ordered = TRUE)) %>% 
+    arrange(direction, read_state) %>% 
+    group_by(direction) %>% 
+    mutate(percent_retained = count / lag(count) * 100,
+           percent_removed = 100 - percent_retained)
+}
+
+read_counts_multi <- map2_dfr(read_count_files$path, read_count_files$SampleID, import_read_counts)
+
+```
+
+Plot outcome of QC steps
+```{r}
+(read_counts_multi %>% 
+  ggplot(aes(SampleID, percent_removed, color = read_state)) +
+  geom_point() +
+  facet_grid(read_state ~ ., scales = "free_y")
+) %>% plotly::ggplotly()
+```
+
+
+
+
