@@ -7,7 +7,9 @@ import pandas as pd
 import time
 
 # Get a list of sample names from fastq files
-samples = glob_wildcards("data/fastqs/{SampleID}_fwd.fastq.gz").SampleID
+#samples = glob_wildcards("data/fastqs/{SampleID}_fwd.fastq.gz").SampleID
+
+samples="samp_447"
 
 # Get a list of directions from fastq files
 directions = glob_wildcards("data/fastqs/{SampleID}_{direction}.fastq.gz").direction
@@ -20,7 +22,12 @@ rule run_fastp:
     input: expand("data/fastqs/{SampleID}_qcd_{direction}.fastq.gz", SampleID = samples, direction = directions)
 
 rule run_human_read_removal:
-    input: expand("data/fastqs/{SampleID}_decon_fwd.fastq.gz", SampleID = samples, direction = directions)
+    input: 
+        expand("data/fastqs/{SampleID}_decon_fwd.fastq.gz", SampleID = samples, direction = directions),
+        expand("data/fastqs/{SampleID}_read_count_fastp.tsv", SampleID = samples)
+
+rule run_megahit:
+    input: expand("data/assembly/megahit/{SampleID}", SampleID = samples)
 
 
 # Rule for running fastqc
@@ -162,14 +169,14 @@ rule remove_contaminants:
 
 rule count_reads_fastp:
     input:
-        raw_reads_fwd = "data/fastqs/samp_447_fwd.fastq.gz",
-        raw_reads_rev = "data/fastqs/samp_447_rev.fastq.gz",
-        deduped_reads_fwd = "data/fastqs/{SampleID}_dedup_tmp_fwd.fastq.gz"
+        raw_reads_fwd = "data/fastqs/{SampleID}_fwd.fastq.gz",
+        raw_reads_rev = "data/fastqs/{SampleID}_rev.fastq.gz",
+        deduped_reads_fwd = "data/fastqs/{SampleID}_dedup_tmp_fwd.fastq.gz",
         deduped_reads_rev = "data/fastqs/{SampleID}_dedup_tmp_rev.fastq.gz",
-        qual_filt_and_trimmed_fwd = "data/fastqs/samp_447_qcd_fwd.fastq.gz",
-        qual_filt_and_trimmed_rev = "data/fastqs/samp_447_qcd_rev.fastq.gz",
-        decon_reads_fwd = "data/fastqs/samp_447_decon_fwd.fastq.gz",
-        decon_reads_rev = "data/fastqs/samp_447_decon_rev.fastq.gz"
+        qual_filt_and_trimmed_fwd = "data/fastqs/{SampleID}_qcd_fwd.fastq.gz",
+        qual_filt_and_trimmed_rev = "data/fastqs/{SampleID}_qcd_rev.fastq.gz",
+        decon_reads_fwd = "data/fastqs/{SampleID}_decon_fwd.fastq.gz",
+        decon_reads_rev = "data/fastqs/{SampleID}_decon_rev.fastq.gz"
     output:
         "data/fastqs/{SampleID}_read_count_fastp.tsv"
     resources: cpus=4
@@ -180,4 +187,49 @@ rule count_reads_fastp:
         printf "deduped_reads\t$(($(pigz -dc -p {resources.cpus} {input.deduped_reads_fwd} | wc -l) / 4 ))\t$(($(pigz -dc -p {resources.cpus} {input.deduped_reads_rev} | wc -l) / 4 ))\n" >> {output} &&
         printf "filt_and_trimmed_reads\t$(($(pigz -dc -p {resources.cpus} {input.qual_filt_and_trimmed_fwd} | wc -l) / 4 ))\t$(($(pigz -dc -p {resources.cpus} {input.qual_filt_and_trimmed_rev} | wc -l) / 4 ))\n" >> {output} &&
         printf "decon_reads\t$(($(pigz -dc -p {resources.cpus} {input.decon_reads_fwd} | wc -l) / 4 ))\t$(($(pigz -dc -p {resources.cpus} {input.decon_reads_rev} | wc -l) / 4 ))\n" >> {output}
+        """
+
+rule megahit:
+    input:
+        decon_reads_fwd = "data/fastqs/{SampleID}_decon_fwd.fastq.gz",
+        decon_reads_rev = "data/fastqs/{SampleID}_decon_rev.fastq.gz"
+    output:
+        assembly_directory = directory("data/assembly/megahit/{SampleID}")
+    log: "logs/megahit/{SampleID}.log"
+    conda: "config/conda/megahit.yaml"
+    resources: cpus = 24, mem_mb = 500000, time_min = 7200
+    shell:
+        """
+        rm -rf {output.assembly_directory} # for re-running, megahit doesn't overwrite automatically
+
+        megahit \
+            -1 {input.decon_reads_fwd} \
+            -2 {input.decon_reads_rev} \
+            -t {resources.cpus} \
+            --presets meta-sensitive \
+            -m 0.5 \
+            -o {output.assembly_directory} 2>&1 | tee -a {log}
+        """
+
+rule run_quast:
+    input:
+        expand("data/assembly/{SampleID}/quast/report.tsv", SampleID = samples)
+
+rule quast_megahit:
+    input:
+        megahit_contigs = "data/assembly/megahit/{SampleID}/final.contigs.fa"
+    output:
+        report = "data/assembly/{SampleID}/quast/report.tsv"
+    params:
+        out_dir = "data/assembly/{SampleID}/quast"
+    log: "log/megahit/quast_megahit/{SampleID}.log"
+    benchmark:
+        "benchmarks/assembly/quast_megahit/{SampleID}.txt"
+    conda:
+        "config/conda/quast.yaml"
+    resources:
+        cpus = 1, mem_mb = 20000
+    shell:
+        """
+        quast.py {input.megahit_contigs} -o {params.out_dir} 2>&1 | tee {log}
         """
