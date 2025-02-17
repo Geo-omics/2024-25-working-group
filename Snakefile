@@ -30,6 +30,10 @@ rule run_megahit:
     input: expand("data/assembly/megahit/{SampleID}", SampleID = samples)
 
 
+rule run_contig_coverage:
+    input: expand:("data/contig_coverage/{SampleID}-metabat_style_contig_coverage.tsv", SampleID = samples)
+
+
 # Rule for running fastqc
 rule fastqc:
     input:
@@ -232,4 +236,37 @@ rule quast_megahit:
     shell:
         """
         quast.py {input.megahit_contigs} -o {params.out_dir} 2>&1 | tee {log}
+        """
+
+rule contig_coverage:
+    input:
+        decon_reads_fwd = "data/fastqs/{SampleID}_decon_fwd.fastq.gz",
+        decon_reads_rev = "data/fastqs/{SampleID}_decon_rev.fastq.gz",
+        assembly_directory = directory("data/assembly/megahit/{SampleID}")
+    output: 
+        coverage_metabat = "data/contig_coverage/{SampleID}-metabat_style_contig_coverage.tsv"
+    params:
+        tmpdir = "tmp/coverm_contig_coverage/{SampleID}"
+    benchmark: "benchmarks/contig_coverage/{SampleID}.txt"
+    conda: "config/conda/coverm.yaml"
+    resources: cpus=24, mem_mb=120000, time_min=2880 # standard assemblies
+    #resources: cpus=24, mem_mb=1000000, time_min=2880, partition = "largemem" # coassembly
+    priority: 2
+    shell:
+        """
+        export TMPDIR={params.tmpdir}
+        [[ "${{HOSTNAME}}" == "cayman" || "${{HOSTNAME}}" == "vondamm" ]] && export TMPDIR=/scratch/$USER
+        mkdir -p $TMPDIR
+
+        coverm contig \
+            -c data/fastqs/*_decon_fwd.fastq.gz \
+            -r {input.assembly_directory}/final.contigs.fa \
+            --bam-file-cache-directory $TMPDIR/{wildcards.SampleID} \
+            --discard-unmapped \
+            -t {resources.cpus} \
+            --mapper minimap2-sr \
+            --methods metabat \
+            --output-file {output.coverage_metabat}
+
+        rm -r {params.tmpdir}
         """
