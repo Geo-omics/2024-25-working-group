@@ -29,10 +29,11 @@ rule run_human_read_removal:
 rule run_megahit:
     input: expand("data/assembly/megahit/{SampleID}", SampleID = samples)
 
-
 rule run_contig_coverage:
-    input: expand:("data/contig_coverage/{SampleID}-metabat_style_contig_coverage.tsv", SampleID = samples)
+    input: expand("data/contig_coverage/{SampleID}-metabat_style_contig_coverage.tsv", SampleID = samples)
 
+rule run_metabat2:
+    input: expand("data/metabat2/{SampleID}/.done", SampleID = samples)
 
 # Rule for running fastqc
 rule fastqc:
@@ -242,7 +243,7 @@ rule contig_coverage:
     input:
         decon_reads_fwd = "data/fastqs/{SampleID}_decon_fwd.fastq.gz",
         decon_reads_rev = "data/fastqs/{SampleID}_decon_rev.fastq.gz",
-        assembly_directory = directory("data/assembly/megahit/{SampleID}")
+        assembly_directory = "data/assembly/megahit/{SampleID}"
     output: 
         coverage_metabat = "data/contig_coverage/{SampleID}-metabat_style_contig_coverage.tsv"
     params:
@@ -268,5 +269,27 @@ rule contig_coverage:
             --methods metabat \
             --output-file {output.coverage_metabat}
 
-        rm -r {params.tmpdir}
+        rm -r $TMPDIR/{wildcards.SampleID}
         """
+
+rule metabat2:
+    input:
+        assembly_directory = "data/assembly/megahit/{SampleID}",
+        coverm_depth = "data/contig_coverage/{SampleID}-metabat_style_contig_coverage.tsv"
+    output:
+        done = touch("data/metabat2/{SampleID}/.done")
+    params:
+        bin_name = directory("data/metabat2/{SampleID}/metabat2")
+    benchmark: "benchmarks/metabat2/{SampleID}.txt"
+    singularity: "docker://metabat/metabat"
+    resources: cpus=16, mem_mb=20000, time_min=2880 # standard samples
+    shell:
+        """
+        metabat2 -i {input.assembly_directory}/final.contigs.fa \
+            -a {input.coverm_depth} \
+            -o {params.bin_name} \
+            -m 2000 \
+            -t {resources.cpus} \
+            --unbinned
+        """
+
