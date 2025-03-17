@@ -35,6 +35,22 @@ rule run_contig_coverage:
 rule run_metabat2:
     input: expand("data/metabat2/{SampleID}/.done", SampleID = samples)
 
+rule run_checkm:
+    input: expand("data/checkm/{SampleID}.txt", SampleID = samples)
+
+rule run_gtdb:
+    input: expand("data/GTDB_{database_version}/{SampleID}/.done_GTDB", SampleID = samples, database_version = "release220")
+
+# Make a graph of all our rules
+rule make_rulegraph:
+    output:
+        "rulegraph.pdf",
+        "rulegraph.png"
+    shell:
+        """
+        snakemake data/checkm/samp_447.txt --rulegraph --dry-run | dot -Tpdf > rulegraph.pdf
+        """
+
 # Rule for running fastqc
 rule fastqc:
     input:
@@ -279,7 +295,7 @@ rule metabat2:
     output:
         done = touch("data/metabat2/{SampleID}/.done")
     params:
-        bin_name = directory("data/metabat2/{SampleID}/metabat2")
+        bin_name = "data/metabat2/{SampleID}/metabat2"
     benchmark: "benchmarks/metabat2/{SampleID}.txt"
     singularity: "docker://metabat/metabat"
     resources: cpus=16, mem_mb=20000, time_min=2880 # standard samples
@@ -293,3 +309,43 @@ rule metabat2:
             --unbinned
         """
 
+rule checkm:
+    input: "data/metabat2/{SampleID}/.done"
+    output:
+        results = "data/checkm/{SampleID}.txt"
+    params:
+        in_dir = "data/metabat2/{SampleID}",
+        out_dir = "data/checkm/{SampleID}_full_results"
+    conda: "config/conda/checkm.yaml"
+    resources: cpus=16, mem_mb=80000, time_min=2880
+    shell:
+        """
+        checkm lineage_wf --tab_table -f {output.results} -x fa -t {resources.cpus} {params.in_dir} {params.out_dir}
+        """
+
+rule GTDB_versioned:
+    input:
+        metabat_complete = "data/metabat2/{SampleID}/.done",
+        refs = "/geomicro/data2/kiledal/GLAMR/data/reference/GTDBtk/{database_version}"
+    params:
+        input_bin_dir = "data/metabat2/{SampleID}",
+        out_dir = "data/GTDB_{database_version}/{SampleID}",
+        pplacer_cpus = 1
+    output:
+        done = touch("data/GTDB_{database_version}/{SampleID}/.done_GTDB")
+    conda: "config/conda/gtdbtk_2.4.0.yaml"
+    benchmark: "benchmarks/GTDB/{SampleID}_database-{database_version}.txt"
+    log: "logs/GTDB/{SampleID}_database-{database_version}.log"
+    resources: cpus=16, mem_mb=100000, time_min=2880
+    shell:
+        """
+        export GTDBTK_DATA_PATH={input.refs}
+
+        gtdbtk classify_wf \
+            --extension fa \
+            --genome_dir {params.input_bin_dir} \
+            --out_dir {params.out_dir} \
+            --cpus {resources.cpus} \
+            --pplacer_cpus {params.pplacer_cpus} \
+            --mash_db $GTDBTK_DATA_PATH/mash_db
+        """
