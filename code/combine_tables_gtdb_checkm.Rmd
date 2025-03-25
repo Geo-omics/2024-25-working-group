@@ -1,0 +1,43 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+checkm_files <- Sys.glob("~/projects/2024_working_group/data/checkm/*.txt") %>% 
+  data.frame(path = .) %>% 
+  unglue::unglue_unnest(path, "/geomicro/data2/kiledal/projects/2024_working_group/data/checkm/{SampleID}.txt",remove = FALSE)
+
+read_tsv_w_sample <- function(checkm_path, sample){
+  read_tsv(checkm_path,show_col_types = FALSE) %>% 
+    mutate(SampleID = sample) %>% 
+    relocate(SampleID)
+}
+
+all_checkm_results <- map2_df(checkm_files$path, checkm_files$SampleID, read_tsv_w_sample)
+```
+
+
+```{r}
+gtdb_files <- Sys.glob("~/projects/2024_working_group/data/GTDB_release220/*/gtdbtk.*.summary.tsv") %>% 
+  tibble(path = .) %>% 
+  unglue::unglue_unnest(path, "/geomicro/data2/kiledal/projects/2024_working_group/data/GTDB_release220/{SampleID}/gtdbtk.{bac_or_arc}.summary.tsv",remove = FALSE)
+
+read_gtdb_w_sample <- function(gtdb_path, sample){
+  read_tsv(gtdb_path,show_col_types = FALSE) %>% 
+    mutate(SampleID = sample) %>% 
+    relocate(SampleID)
+}
+
+all_gtdb_results <- map2_dfr(gtdb_files$path, checkm_files$SampleID, read_gtdb_w_sample)
+
+```
+
+If using more than 3 arguments, can use this kind of syntax:
+
+pmap_dfr(.l = list(input1 = c(),
+                   input2 = c(),
+                   input3 = c()),
+         .f = read_gtdb_w_sample
+         )
+

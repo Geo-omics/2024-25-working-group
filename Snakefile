@@ -41,6 +41,9 @@ rule run_checkm:
 rule run_gtdb:
     input: expand("data/GTDB_{database_version}/{SampleID}/.done_GTDB", SampleID = samples, database_version = "release220")
 
+rule run_bin_abundance:
+    input: expand("data/bin_abundance/{SampleID}.txt", SampleID = samples)
+
 # Make a graph of all our rules
 rule make_rulegraph:
     output:
@@ -320,6 +323,10 @@ rule checkm:
     resources: cpus=16, mem_mb=80000, time_min=2880
     shell:
         """
+        # Move the files corresponding to unbinned contigs to a subfolder so checkM isn't run on them
+        mkdir -p data/metabat2/{wildcards.SampleID}/unbinned 
+        mv data/metabat2/{wildcards.SampleID}/metabat2.[!0-9]*.fa data/metabat2/{wildcards.SampleID}/unbinned || true
+
         checkm lineage_wf --tab_table -f {output.results} -x fa -t {resources.cpus} {params.in_dir} {params.out_dir}
         """
 
@@ -348,4 +355,29 @@ rule GTDB_versioned:
             --cpus {resources.cpus} \
             --pplacer_cpus {params.pplacer_cpus} \
             --mash_db $GTDBTK_DATA_PATH/mash_db
+        """
+
+rule bin_abundance:
+    input:
+        "data/metabat2/{SampleID}/.done",
+        decon_reads_fwd = "data/fastqs/{SampleID}_decon_fwd.fastq.gz",
+        decon_reads_rev = "data/fastqs/{SampleID}_decon_rev.fastq.gz"
+    output:
+        "data/bin_abundance/{SampleID}.txt",
+    params:
+        bin_dir = "data/metabat2/{SampleID}"
+    benchmark: "benchmarks/bin_abundance/{SampleID}.txt"
+    conda: "config/conda/coverm.yaml"
+    resources: cpus=24, mem_mb=120000, time_min=2880 # standard assemblies
+    shell:
+        """
+        coverm genome \
+            -t {resources.cpus} \
+            --methods relative_abundance mean trimmed_mean covered_bases variance length count reads_per_base rpkm tpm \
+            --output-format sparse \
+            --min-covered-fraction 0 \
+            -1 {input.decon_reads_fwd} \
+            -2 {input.decon_reads_rev} \
+            --genome-fasta-files {params.bin_dir}/*.fa \
+            -o {output}
         """
