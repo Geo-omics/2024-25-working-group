@@ -11,6 +11,8 @@ import time
 
 samples="samp_447"
 
+genomes = glob_wildcards("data/metabat2/{SampleID}/{genome}.fa").genome
+
 # Get a list of directions from fastq files
 directions = glob_wildcards("data/fastqs/{SampleID}_{direction}.fastq.gz").direction
 
@@ -43,6 +45,12 @@ rule run_gtdb:
 
 rule run_bin_abundance:
     input: expand("data/bin_abundance/{SampleID}.txt", SampleID = samples)
+
+rule run_drep:
+    input: expand("data/drep/{SampleID}/.drep_done", SampleID = samples)
+
+rule run_kofamscan:
+    input: expand("data/metabat2/{SampleID}/kofamscan/{genome}_kofam_results.txt", SampleID = samples, genome = genomes)
 
 # Make a graph of all our rules
 rule make_rulegraph:
@@ -380,4 +388,67 @@ rule bin_abundance:
             -2 {input.decon_reads_rev} \
             --genome-fasta-files {params.bin_dir}/*.fa \
             -o {output}
+        """
+
+rule drep_new:
+    input: 
+        input_bins = "data/metabat2/{SampleID}"
+    output:
+        touch("data/drep/{SampleID}/.drep_done")
+    params:
+        main_dir = directory("data/drep/{SampleID}/"),
+        input_bins = "data/metabat2/{SampleID}/*.fa"
+    conda: "config/conda/drep.yaml"
+    log: "logs/drep/{SampleID}.log"
+    benchmark: "benchmarks/drep/{SampleID}.txt"
+    resources: cpus=8, mem_mb=150000, time_min=2880
+    shell:
+        """
+        rm -rf {params.main_dir} # Clear any old drep output
+        
+        dRep dereplicate \
+            {params.main_dir} \
+            -p {resources.cpus} \
+            --contamination 50 \
+            --completeness 30 \
+            -pa 0.9 \
+            -sa 0.99 \
+            --length 10000 \
+            -g {params.input_bins}
+        """
+
+rule prodigal:
+    input:
+        genome = "data/metabat2/{SampleID}/{genome}.fa"
+    output: 
+        proteins = "data/metabat2/{SampleID}/prodigal/{genome}.faa",
+        genes = "data/metabat2/{SampleID}/prodigal/{genome}.gff"
+    conda: "config/conda/prodigal.yaml"
+    resources: cpus = 1, mem_mb = 10000
+    shell:
+        """
+        prodigal -i {input.genome} -a {output.proteins} -d {output.genes} #1>{log} 2>&1
+        """
+
+rule kofam_scan:
+    input:
+        proteins = "data/metabat2/{SampleID}/prodigal/{genome}.faa",
+        profile = "/geomicro/data2/kiledal/GLAMR/data/reference/kegg/kofamscan/profiles",
+        ko_list = "/geomicro/data2/kiledal/GLAMR/data/reference/kegg/kofamscan/ko_list"
+    output:
+        ko_annot = "data/metabat2/{SampleID}/kofamscan/{genome}_kofam_results.txt"
+    conda: "config/conda/kofamscan.yaml"
+    #shadow: "shallow"
+    benchmark: "benchmarks/kofamscan/{SampleID}-{genome}.txt"
+    log: "logs/kofamscan/{SampleID}-{genome}.log"
+    resources: cpus=24, time_min = 20000, mem_mb = lambda wildcards, attempt: attempt * 100000
+    shell:
+        """
+        exec_annotation \
+            -o {output.ko_annot} \
+            --format=detail-tsv \
+            --cpu={resources.cpus}  \
+            --profile {input.profile} \
+            --tmp-dir=/tmp/{wildcards.SampleID}_kofamscan \
+            --ko-list {input.ko_list} {input.proteins} | tee {log}
         """
