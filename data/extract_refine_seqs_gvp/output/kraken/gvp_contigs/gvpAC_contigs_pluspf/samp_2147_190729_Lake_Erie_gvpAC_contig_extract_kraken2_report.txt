@@ -1,0 +1,13 @@
+100.00	1	0	1416	1389	R	1	root
+100.00	1	0	1416	1389	R1	131567	  cellular organisms
+100.00	1	0	1416	1389	D	2	    Bacteria
+100.00	1	0	1415	1388	D1	1783272	      Terrabacteria group
+100.00	1	0	1414	1387	D2	1798711	        Cyanobacteriota/Melainabacteria group
+100.00	1	0	1414	1387	P	1117	          Cyanobacteriota
+100.00	1	0	1414	1387	C	3028117	            Cyanophyceae
+100.00	1	0	1406	1380	C1	1301283	              Oscillatoriophycideae
+100.00	1	0	1399	1374	O	1118	                Chroococcales
+100.00	1	0	1393	1368	F	1890449	                  Microcystaceae
+100.00	1	0	1393	1368	G	1125	                    Microcystis
+100.00	1	0	521	515	S	1126	                      Microcystis aeruginosa
+100.00	1	1	390	388	S1	2528657	                        Microcystis aeruginosa NRERC-214

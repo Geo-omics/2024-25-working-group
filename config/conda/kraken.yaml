@@ -1,0 +1,11 @@
+name: kraken2_2024.2
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+  - r
+  - nodefaults
+dependencies:
+  - kraken2=2.1.3
+  - libgcc-ng=12.2.0=h65d4601_19
+prefix: /geomicro/data2/pdenuyl2/miniconda3/envs/kraken2_2024.2

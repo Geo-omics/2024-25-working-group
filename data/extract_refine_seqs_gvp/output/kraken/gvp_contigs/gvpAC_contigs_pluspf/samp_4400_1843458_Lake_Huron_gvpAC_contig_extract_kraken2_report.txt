@@ -1,0 +1,12 @@
+100.00	1	0	1221	1221	R	1	root
+100.00	1	0	1221	1221	R1	131567	  cellular organisms
+100.00	1	0	1221	1221	D	2	    Bacteria
+100.00	1	0	1221	1221	D1	1783272	      Terrabacteria group
+100.00	1	0	1220	1220	D2	1798711	        Cyanobacteriota/Melainabacteria group
+100.00	1	0	1220	1220	P	1117	          Cyanobacteriota
+100.00	1	0	1220	1220	C	3028117	            Cyanophyceae
+100.00	1	0	1214	1214	O	1161	              Nostocales
+100.00	1	0	61	61	F	1162	                Nostocaceae
+100.00	1	0	61	61	G	1163	                  Anabaena
+100.00	1	0	61	61	G1	2619674	                    unclassified Anabaena
+100.00	1	1	53	53	S	1647413	                      Anabaena sp. WA102

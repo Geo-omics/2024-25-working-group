@@ -452,3 +452,136 @@ rule kofam_scan:
             --tmp-dir=/tmp/{wildcards.SampleID}_kofamscan \
             --ko-list {input.ko_list} {input.proteins} | tee {log}
         """
+
+rule make_blast_db_PD:
+    input: 
+        "/geomicro/data2/pdenuyl2/CIGLR_bioinformatics/2025/SagBay/blast/database/nucl/{blast_name}.fasta"
+    output: 
+        "/geomicro/data2/pdenuyl2/CIGLR_bioinformatics/2025/SagBay/blast/database/nucl/{blast_name}.fasta.nin"
+    conda: 
+        "config/conda/blast.yaml"
+    resources: 
+        cpus=1, mem_mb=5000, time_min=10000
+    shell: 
+        """
+        makeblastdb -in {input} -dbtype nucl -logfile {log}
+        """
+
+rule blastn_assemblies_UNIVERSAL:
+    input: 
+        blast_db = "/geomicro/data2/pdenuyl2/CIGLR_bioinformatics/2025/SagBay/blast/database/nucl/{blast_name}.fasta",
+        blast_db_index = "/geomicro/data2/pdenuyl2/CIGLR_bioinformatics/2025/SagBay/blast/database/nucl/{blast_name}.fasta.nin",
+        assembly = "/geomicro/data2/pdenuyl2/metagenomics_wg24/data/extract_refine_seqs_gvp/assembly/megahit_noNORM/{sample}_final.contigs.renamed.fa"
+    output:
+         "data/extract_refine_seqs_gvp/output/blastn/{sample}_{blast_name}_contigs_blastn.tsv"
+    conda: 
+        "config/conda/blast.yaml"
+    resources:
+        cpus=4, mem_mb=16000, time_min=10000
+    shell:
+        """
+        blastn -db {input.blast_db} -query {input.assembly} -out {output} -outfmt '6 std qcovs stitle qlen' -num_threads {resources.cpus} -evalue 1e-2
+        """
+
+rule run_blastn_assemblies_gvpAC:
+    input: 
+        expand("data/extract_refine_seqs_gvp/output/blastn/{sample}_{blast_name}_contigs_blastn.tsv", sample = glob_wildcards("/geomicro/data2/pdenuyl2/metagenomics_wg24/2024-25-working-group/data/extract_refine_seqs_gvp/assembly/megahit_noNORM/{sample}_final.contigs.renamed.fa",followlinks=True).sample, blast_name = "blastdbbuoyancygvpAC")
+
+rule kraken2_gvpAC_contigs_pluspf:
+    input: 
+        contigs = "data/extract_refine_seqs_gvp/contigs/kraken/gvp_contigs/{contig_name}.fa",
+        db = "/geomicro/data2/pdenuyl2/CIGLR_bioinformatics/2024/SagBay/kraken/database_ln/k2_pluspf_20240904"
+    output:
+        annot = "data/extract_refine_seqs_gvp/output/kraken/gvp_contigs/gvpAC_contigs_pluspf/{contig_name}_kraken2_output.txt",
+        report = "data/extract_refine_seqs_gvp/output/kraken/gvp_contigs/gvpAC_contigs_pluspf/{contig_name}_kraken2_report.txt"
+    conda: 
+        "config/conda/kraken.yaml"
+    resources:
+        cpus = 12, 
+        mem_mb = 64000, 
+        time_min = 10000
+    shell:
+        """
+        kraken2 --threads {resources.cpus} \
+        --output {output.annot} \
+        --report {output.report} \
+        --report-minimizer-data \
+        --use-names \
+        --minimum-hit-groups 3 \gvpAC_contigs_pluspf/
+        --db {input.db} \
+        {input.contigs}
+        """
+
+rule run_kraken2_gvpAC_contigs_pluspf:
+    input: 
+        expand("data/extract_refine_seqs_gvp/output/kraken/gvp_contigs/gvpAC_contigs_pluspf/{contig_name}_kraken2_output.txt", contig_name = glob_wildcards("data/extract_refine_seqs_gvp/contigs/kraken/gvp_contigs/{sample}.fa",followlinks=True).sample)
+
+rule bakta_mcy_buoyancy_contigs:
+    input: 
+        fasta = "../output/clinker/gvp_contigs/bakta/input/{contig_name}.fa",
+        db = "/geomicro/data2/pdenuyl2/databases/bakta/db"
+    output: 
+        folder = directory("../output/clinker/gvp_contigs/bakta/output/{contig_name}")
+    conda: 
+        "config/conda/bakta.yaml"
+    resources:
+        cpus = 8, 
+        mem_mb = 16000, 
+        time_min = 10000
+    shell:
+        """
+        bakta \
+        --db {input.db} \
+        --threads {resources.cpus} \
+        --output {output.folder} \
+        {input.fasta}
+
+        cp {output.folder}/*.gbff ../output/clinker/gvp_contigs/bakta/output/gbff/ # consilodate gbff files from bakta
+        """
+
+rule run_bakta_mcy_buoyancy_contigs:
+    input:
+        expand("../output/clinker/gvp_contigs/bakta/output/{contig_name}", contig_name = glob_wildcards("../output/clinker/gvp_contigs/bakta/input/{contig}.fa",followlinks=True).contig)
+
+rule clinker_buoyancy_gvpAC_mcy_contigs:
+    conda: 
+        "config/conda/clinker.yaml"
+    shell:
+        """
+        clinker ../output/clinker/gvp_contigs/bakta/output/gbff/*.gbff \
+            -p ../output/clinker/gvp_contigs/buoyancy_gvpAC_mcy_contigs_set41_workinggroup.html
+        """
+
+rule run_blastn_assemblies_samp_4400_818442_Lake_Huron_gvpAC:
+    input: 
+        expand("../output/blastn/{sample}_{blast_name}_contigs_blastn.tsv", sample = glob_wildcards("../glamr_data/assembly/{sample}_final.contigs.renamed.fa", followlinks=True).sample, run = "assemblies_vs_buoyancy", blast_name = "blastdbbuoyancysamp4400818442LH")
+
+rule kraken2_microcystis_set41_contigs_pluspf:
+    input: 
+        contigs = "kraken/set_41/megahit_assemblies/{contig_name}.fa",
+        db = "/geomicro/data2/pdenuyl2/CIGLR_bioinformatics/2024/SagBay/kraken/database_ln/k2_pluspf_20240904"
+    output:
+        annot = "kraken/set_41/output/set41_contigs_pluspf/{contig_name}_kraken2_output.txt",
+        report = "kraken/set_41/output/set41_contigs_pluspf/{contig_name}_kraken2_report.txt"
+    conda: 
+        "config/kraken.yml"
+    resources:
+        cpus = 12, 
+        mem_mb = 64000, 
+        time_min = 10000
+    shell:
+        """
+        kraken2 --threads {resources.cpus} \
+        --output {output.annot} \
+        --report {output.report} \
+        --report-minimizer-data \
+        --use-names \
+        --minimum-hit-groups 3 \
+        --db {input.db} \
+        {input.contigs}
+        """
+
+rule run_kraken2_microcystis_set41_contigs_pluspf:
+    input: 
+        expand("kraken/set_41/output/set41_contigs_pluspf/{contig_name}_kraken2_output.txt", contig_name = glob_wildcards("kraken/set_41/megahit_assemblies/{sample}.fa",followlinks=True).sample)
+

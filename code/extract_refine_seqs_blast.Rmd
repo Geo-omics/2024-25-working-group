@@ -1,8 +1,8 @@
 ---
-title: "SB25_notebook1_gvp"
+title: "extract and refine sequences of interest from metagenomic assemblies"
 output: html_notebook
 editor_options: 
-  chunk_output_type: inline
+chunk_output_type: inline
 ---
 
 Dependencies
@@ -15,6 +15,7 @@ library(vroom)
 library(Biostrings)
 library(seqinr)
 library(dplyr)
+library (here)
 
 #Load postgres server running on Alpena
 pg <- DBI::dbConnect(RPostgres::Postgres(),dbname = "glamr_data", host = "cayman.earth.lsa.umich.edu", port = "5432", user = "glamr_admin", password = "glamr2023")
@@ -22,28 +23,39 @@ pg <- DBI::dbConnect(RPostgres::Postgres(),dbname = "glamr_data", host = "cayman
 #Load GLAMR GTDBTK data
 gtdb <- tbl(pg, "GTDB") %>% 
   collect() %>% 
-  mutate(sample = str_extract(bin, "samp_\\d+")) #%>%
-  #rename(bin = "user_genome") %>%                    #change updated column title to old for consistency in code: April 15, 2024
-  #relocate(user_genome, sample) 
+  mutate(sample = str_extract(bin, "samp_\\d+")) 
 
 #Load GLAMR CheckM data
 checkM <- tbl(pg, "checkm") %>% 
   collect() %>% 
-  mutate(sample = str_extract(bin, "samp_\\d+")) #%>% 
-  #rename(bin = "Bin Id") %>%                         #change updated column title to old for consistency in code: April 15, 2024
-  #relocate(`Bin Id`, sample)
+  mutate(sample = str_extract(bin, "samp_\\d+")) 
 
 #Load GLAMR sample data
 glamr_samples_pg <- tbl(pg, "glamr_samples") %>% 
   collect() 
+
+#set working directory
+here("/geomicro/data2/pdenuyl2/metagenomics_wg24/2024-25-working-group")
+
  
 ``` 
 
 ---Outline---
+PART A: Identify contigs
 1.) Setup of general GLAMR data and assemblies of interest for BLASTN, filter data set, symlink processed contigs
-  note: Previous work was done investigating gvpP genes in: /geomicro/data2/pdenuyl2/CIGLR_bioinformatics/2024/SagBay
 2.) BLAST assemblies to identify contigs that possess gvpA or gvpC (source - doi: https://doi.org/10.1038/nrmicro2834) 
 3.) Keep only contigs that contain gvpA or gvpC genes
+
+PART B: Classify/visualize contigs of interest
+4.) Run Kraken to annotate contigs with taxonomic classification
+5.) Analyze Kraken output to determine Microcystis contigs
+6.) Run Bakta to create .gbf (newer version of .gbk) files for clinker visulaization
+7.) Run Clinker to visualize Microcystis contigs with both gvpA and gvpC genes
+
+PART C: Extract all genes from contig
+8.) Extract genes from single contig using bedtools
+9.) BLAST assemblies using genes as database 
+10.) Organize into fasta files for each target (tree building, etc.)
 
 1.) Assembly path setup
 ```{r}
@@ -52,35 +64,44 @@ glamr_samples_pg <- tbl(pg, "glamr_samples") %>%
 GLAMR_sample_table_set41 <- glamr_samples_pg %>% 
                               filter(StudyID %in% "set_41")           #include only StudyID of interest (NOAA-GLERL metagenomes)
 
-#Save data table used (Last used/saved: January 13, 2025)
-#write_csv(GLAMR_sample_table_set41, file = "GLAMR_metadata/GLAMR_sample_table_pg_SB_13Jan25.csv")
-GLAMR_sample_table_set41_read <- read_csv(file = "GLAMR_metadata/GLAMR_sample_table_pg_SB_13Jan25.csv", show_col_types = FALSE)
+#Save data table used (Last used/saved: April 23, 2025)
+##write_csv(GLAMR_sample_table_set41, file = "../data/extract_refine_seqs_gvp/GLAMR_sample_table_pg_SB_23Apr25.csv")
+GLAMR_sample_table_set41_read <- read_csv(file = "../data/extract_refine_seqs_gvp/GLAMR_sample_table_pg_SB_23Jan25.csv", show_col_types = FALSE)
                                
-GLAMR_sample_table_set41 %>% distinct(SampleID) %>% dplyr::count() #218 metagenome samples in GLAMR - January 13, 2025
+GLAMR_sample_table_set41 %>% distinct(SampleID) %>% dplyr::count() #218 metagenome samples in GLAMR - April 23, 2025
+
+#Randomly sample 5 rows for a smaller dataset (just for April 2025 group walkthrough)
+set.seed(5) #set seed for random selection of dataset - makes for easier testing/walkthrough
+set41_subset_i <- sample_n(GLAMR_sample_table_set41, 5) 
+
+#For example, include additional sample:
+set_41_samp_4400 <- GLAMR_sample_table_set41_read %>%
+                          filter(SampleID == "samp_4400")
+
+set41_subset <- rbind(set41_subset_i, set_41_samp_4400)
 
 #Gather all read paths to megahit assemblies to process through BLASTN, sym link to new path
-assembly_paths <- system("ls /geomicro/data2/kiledal/GLAMR/data/omics/metagenomes/*/assembly/megahit_noNORM/final.contigs.renamed.fa",intern = TRUE) %>% 
-  tibble(read_path = .) %>% mutate(sample = read_path %>% str_remove(".*metagenomes/") %>% str_remove("/assembly.*"),
-         new_path = str_glue("blast/query/assemblies_vs_buoyancy/{sample}_final.contigs.renamed.fa")) %>% 
-         filter(sample %in% GLAMR_sample_table_set41_read$SampleID)
-
+assembly_paths <- tibble(sample = set41_subset$SampleID) %>%
+                mutate(read_path = str_glue("/geomicro/data2/kiledal/GLAMR/data/omics/metagenomes/{sample}/assembly/megahit_noNORM/final.contigs.renamed.fa"),
+                       new_path = str_glue("../data/extract_refine_seqs_gvp/assembly/megahit_noNORM/{sample}_final.contigs.renamed.fa"))
+                                  
 #symbolic link read_paths
-##file.symlink(assembly_paths$read_path, assembly_paths$new_path) 
+file.symlink(assembly_paths$read_path, assembly_paths$new_path) 
 
 ```
+
 2.) BLASTN assemblies using snakemake
 ```{bash}
 
-conda activate snakemake8
-snakemake run_blastn_assemblies_gvpAC --profile config/snakemake_profiles/cayman/ --dry-run
+snakemake run_blastn_assemblies_gvpAC --profile config/profiles/vondamm/
 
 ```
 
-3.) Process BLASTN output to get list of contigs that contain gvpA and gvpC - keep only these contigs
+3a.) Process BLASTN output to get list of contigs that contain gvpA and gvpC - keep only these contigs
 ```{r}
 
 #Make list of blastn result outputs
-blastn_assemblies_list <-  system("ls /geomicro/data2/pdenuyl2/CIGLR_bioinformatics/2025/SagBay/blast/output/buoyancy/blastn/assemblies/*blastdbbuoyancygvpAC_contigs_blastn.tsv", intern=TRUE) 
+blastn_assemblies_list <-  system("ls ../data/extract_refine_seqs_gvp/output/blastn/*blastdbbuoyancygvpAC_contigs_blastn.tsv", intern=TRUE) 
 
 #Include only files with results in list
 blastn_assemblies_list_results <- blastn_assemblies_list[file.size(blastn_assemblies_list) > 0]
@@ -108,7 +129,7 @@ colnames(blastn_assemblies_results_vroom) <- c("qseqid", "sseqid", "pident", "le
 #14. stitle      subject title
 #15. qlen        query length
 
-#Make column for general toxin target id, toxin gene target, and sample ids
+#Make column for target and sample ids
 blastn_assemblies_results_vroom_add <- blastn_assemblies_results_vroom %>% mutate(target = substr(sseqid, 1, 3),
                                                                                   gene_target = substr(sseqid, 1,4),
                                                                                   SampleID = qseqid %>% str_extract("samp_.*_") %>% str_sub(end = -2))
@@ -140,11 +161,11 @@ gvp_contigs <- blastn_buoyancy_assemblies_gvpAC_geo_loc_name %>%
 
 ```
 
-Extract contigs for kraken and clinker figure building
+3b.) Extract contigs for kraken and clinker figure building
 ```{r}
 
 ####################################
-#Extract contigs with gvpA and gvpC#
+#Extract contigs with gvpA and gvpC + longer than 3,500bp#
 ####################################
 
 for (seq in gvp_contigs$qseqid) {
@@ -157,12 +178,13 @@ query_name <- gvp_contigs %>%
                   filter(seq == qseqid) %>%
                   select(query_name) 
 
-input_fasta <- paste0("blast/query/assemblies_vs_buoyancy/", SampleID, "_final.contigs.renamed.fa")
-  
-output_fasta <- paste0("kraken/gvp_contigs/extract_seqs/", query_name, "_gvpAC_contig_extract.fa")
+#symlink was giving issues (likely GLAMR permissions)
+input_fasta <- paste0("../data/extract_refine_seqs_gvp/assembly/megahit_noNORM/", SampleID, "_final.contigs.renamed.fa")
+
+output_fasta <- paste0("../data/extract_refine_seqs_gvp/contigs/kraken/gvp_contigs/", query_name, "_gvpAC_contig_extract.fa")
 
 # Read the FASTA file using Biostrings
-fasta_data <- readDNAStringSet(input_fasta, format = "fasta")
+fasta_data <- Biostrings::readDNAStringSet(input_fasta, format = "fasta")
 
 # Convert to tibble for easier manipulation
 fasta_df <- tibble(
@@ -185,21 +207,19 @@ writeXStringSet(contig_sequence, output_fasta)
 
 ```
 
-Run Kraken to annotate contigs with taxonomic classification
+4.) Run Kraken to annotate contigs with taxonomic classification
 ```{bash}
 
 #Runs Kraken2 to annotate contigs
-snakemake run_kraken2_gvpAC_contigs_pluspf --profile config/snakemake_profiles/cayman/
-#Organizes Kraken2 output files into folders for Microcystsis and ADA-clade cyanobacterial contigs
-snakemake run_identify_taxon_kraken2_gvpAC_contigs --profile config/snakemake_profiles/cayman/
+snakemake run_kraken2_gvpAC_contigs_pluspf --profile config/profiles/vondamm/
 
 ```
 
-Analyze Kraken output to determine microcystis and ADA-clade contigs
+5.) Analyze Kraken output to determine Microcystis contigs
 ```{r}
 
 #Gather all Kraken output files
-kraken_paths <- system("ls /geomicro/data2/pdenuyl2/CIGLR_bioinformatics/2025/SagBay/kraken/gvp_contigs/output/gvpAC_contigs_pluspf/*_output.txt", intern = TRUE) %>% 
+kraken_paths <- system("ls ../data/extract_refine_seqs_gvp/output/kraken/gvp_contigs/gvpAC_contigs_pluspf/*_output.txt", intern = TRUE) %>% 
   tibble(output_path = .) 
 
 # Read and combine all .txt files into a single data frame
@@ -218,7 +238,7 @@ for (path in kraken_paths$output_path) {
 
 #Rename columns:
 combined_kraken_output_rename <- combined_kraken_output %>%
-                                      rename("contig" = "X2",
+                                      dplyr::rename("contig" = "X2",
                                              "kraken_tax" = "X3") 
 
 #Keep only contigs identified as Microcystis
@@ -227,94 +247,55 @@ combined_kraken_output_mcy <- combined_kraken_output_rename %>%
 
 ```
 
-Run Bakta to create .gbf (newer version of .gbk) files for clinker
-bakta version: 1.8.1, version: "date": "2023-02-20", "major": 5, "minor": 0, "type": "full", "doi": "10.5281/zenodo.7669534",
+6a.) Run Bakta to create .gbf (newer version of .gbk) files for clinker visulaization
 ```{r}
 
 #Gather all Kraken input files
-kraken_input_contigs <- system("ls /geomicro/data2/pdenuyl2/CIGLR_bioinformatics/2025/SagBay/kraken/gvp_contigs/extract_seqs/*.fa", intern = TRUE) %>% 
+kraken_input_contigs <- system("ls ../data/extract_refine_seqs_gvp/contigs/kraken/gvp_contigs/*.fa", intern = TRUE) %>% 
   tibble(fasta_path = .) %>%
-  mutate(contig_name = fasta_path %>% str_remove(".*extract_seqs/") %>% str_remove("_gvpAC_contig_extract.fa"))
+  mutate(contig_name = fasta_path %>% str_remove(".*gvp_contigs/") %>% str_remove("_gvpAC_contig_extract.fa"))
 
 #Make list of the contigs of interest (annotated as Microcystis) - filter out list above^
 mcy_contigs_oi <- kraken_input_contigs %>%
       filter(contig_name %in% combined_kraken_output_mcy$contig) #generated in Kraken analysis chunk
 
+
+
+######CODE EDIT ENDED - - -  no relative paths yet
 #symlink these contigs to process using Bakta
 mcy_contigs_oi <- mcy_contigs_oi %>%
-                      mutate(bakta_input = paste0("/geomicro/data2/pdenuyl2/CIGLR_bioinformatics/2025/SagBay/clinker/gvp_contigs/bakta/input/", contig_name, "_gvpAC_contig_extract.fa")) 
+                      mutate(bakta_input = paste0("/geomicro/data2/pdenuyl2/metagenomics_wg24/output/clinker/gvp_contigs/bakta/input/", contig_name, "_gvpAC_contig_extract.fa")) 
 
 #symbolic link contig_paths
-##file.symlink(mcy_contigs_oi$fasta_path, mcy_contigs_oi$bakta_input)
+#file.symlink(mcy_contigs_oi$fasta_path, mcy_contigs_oi$bakta_input)
 
 ```
 
-Run Bakta to format Microcystis contigs to .gbff (GenBank format, newer version of .gbk)
+6b.) Run Bakta to format Microcystis contigs to .gbff (GenBank format, newer version of .gbk)
 ```{bash}
 
-snakemake run_bakta_mcy_buoyancy_contigs --profile config/snakemake_profiles/cayman/
+snakemake run_bakta_mcy_buoyancy_contigs --profile config/profiles/vondamm/ -dry-run
 
 ```
 
-Run Clinker to visualize Microcystis contigs with both gvpA and gvpC genes
+7.) Run Clinker to visualize Microcystis contigs with both gvpA and gvpC genes
 ```{bash}
 
-snakemake clinker_buoyancy_gvpAC_mcy_contigs --profile config/snakemake_profiles/cayman/ 
+snakemake run_bakta_mcy_buoyancy_contigs --profile config/profiles/vondamm/ -dry-run
 
 ```
 
-Manually curate which contigs will be plotted in Clinker figure after visualizing snakemake output:
-/geomicro/data2/pdenuyl2/CIGLR_bioinformatics/2025/SagBay/clinker/gvp_contigs/buoyancy_gvpAC_mcy_contigs_set41.html
-```{r}
-#Make a list of contig names for clinker figure
-curated_contigs <- c("samp_4418_191658_Lake_Huron_gvpAC_contig_extract", 
-                     "samp_4400_818442_Lake_Huron_gvpAC_contig_extract", 
-                     "samp_4386_593565_Lake_Erie_gvpAC_contig_extract",
-                     "samp_4385_37362_Lake_Erie_gvpAC_contig_extract",
-                     "samp_4384_1436790_Lake_Erie_gvpAC_contig_extract",
-                     "samp_4383_964923_Lake_Erie_gvpAC_contig_extract",
-                     "samp_4381_151569_Lake_Erie_gvpAC_contig_extract",
-                     "samp_2044_39314_Lake_Erie_gvpAC_contig_extract",
-                     "samp_2055_129740_Lake_Erie_gvpAC_contig_extract",
-                     "samp_2059_36984_Lake_Erie_gvpAC_contig_extract",
-                     "samp_2058_70095_Lake_Erie_gvpAC_contig_extract",
-                     "samp_2073_1116203_Lake_Erie_gvpAC_contig_extract",
-                     "samp_2109_86342_Lake_Erie_gvpAC_contig_extract",
-                     "samp_2115_4114_Lake_Erie_gvpAC_contig_extract",
-                     "samp_4370_661257_Lake_Erie_gvpAC_contig_extract",
-                     "samp_4385_1414750_Lake_Erie_gvpAC_contig_extract",
-                     "samp_4362_423552_Lake_Erie_gvpAC_contig_extract",
-                     "samp_2077_702770_Lake_Erie_gvpAC_contig_extract",
-                     "samp_2043_135767_Lake_Erie_gvpAC_contig_extract")
-
-#symlink these contigs to process using clinker
-#mcy_curated_contigs_oi <- curated_contigs %>%
-                            tibble(contig = .) %>% 
-                              mutate(gbff_input = paste0("/geomicro/data2/pdenuyl2/CIGLR_bioinformatics/2025/SagBay/clinker/gvp_contigs/bakta/output/gbff/", contig, ".gbff"),
-                                     gbff_curated = paste0("/geomicro/data2/pdenuyl2/CIGLR_bioinformatics/2025/SagBay/clinker/gvp_contigs/bakta/output/gbff_curated/", contig, ".gbff")) 
-
-#symbolic link contig_paths
-#file.symlink(mcy_curated_contigs_oi$gbff_input, mcy_curated_contigs_oi$gbff_curated)
-
-```
-
-Rerun clinker with just curated contigs
-```{bash}
-
-snakemake clinker_buoyancy_gvpAC_mcy_contigs_curated --profile config/snakemake_profiles/cayman/ 
-
-```
-
+8.) 
 Extract genes using bedtools
 We want to setup files to blast every gene on contig: samp_4400_818442_Lake_Huron_gvpAC_contig_extract.fa
 ```{bash}
 #Set working directory for bakta outputs - contig of interest
-cd geomicro/data2/pdenuyl2/CIGLR_bioinformatics/2025/SagBay/clinker/gvp_contigs/bakta/output/samp_4400_818442_Lake_Huron_gvpAC_contig_extract
+cd ../output/clinker/gvp_contigs/bakta/output/samp_4400_818442_Lake_Huron_gvpAC_contig_extract/
 
 #Extract genes from fasta (.fna) sequence. Curate for blast database.
-bedtools getfasta /
--fi samp_4400_818442_Lake_Huron_gvpAC_contig_extract.fna /
--bed samp_4400_818442_Lake_Huron_gvpAC_contig_extract.gff3 /
+bedtools getfasta \
+-fi samp_4400_818442_Lake_Huron_gvpAC_contig_extract.fna \
+-bed samp_4400_818442_Lake_Huron_gvpAC_contig_extract.gff3 \
 -fo samp_4400_818442_Lake_Huron_gvpAC_contig_extract_genes_bed.fa
 
 #Manually curate blast database from new output (samp_4400_818442_Lake_Huron_gvpAC_contig_extract_bed.fa)
@@ -327,58 +308,8 @@ cp samp_4400_818442_Lake_Huron_gvpAC_contig_extract_genes_bed_curated.fa /geomic
 blastn set_41 assemblies vs genes on contig: samp_4400_818442_Lake_Huron_gvpAC_contig_extract.fa
 ```{bash}
 
-snakemake run_blastn_assemblies_samp_4400_818442_Lake_Huron_gvpAC --profile config/snakemake_profiles/cayman/ 
+snakemake run_blastn_assemblies_samp_4400_818442_Lake_Huron_gvpAC --profile config/profiles/vondamm/
 
-```
-
-Kraken again (we want to identify all Microcystis contigs) - setup
-```{r}
-
-#Gather all paths to SagBay megahit assemblies to process through BLASTN, sym link to new path
-assembly_paths_kraken <- system("ls /geomicro/data2/kiledal/GLAMR/data/omics/metagenomes/*/assembly/megahit_noNORM/final.contigs.renamed.fa",intern = TRUE) %>% 
-  tibble(assembly_path = .) %>% mutate(sample = assembly_path %>% str_remove(".*metagenomes/") %>% str_remove("/assembly.*"),
-         new_path = str_glue("kraken/set_41/megahit_assemblies/{sample}_final.contigs.renamed.fa")) %>% 
-         filter(sample %in% GLAMR_sample_table_set41$SampleID)
-
-#symbolic link read_paths
-#file.symlink(assembly_paths_kraken$assembly_path, assembly_paths_kraken$new_path)
-
-```
-
-Kraken again (we want to identify all Microcystis contigs) - run
-```{bash}
-
-#Run kraken2 on set_41 samples
-snakemake run_kraken2_microcystis_set41_contigs_pluspf --profile config/snakemake_profiles/cayman/
-
-```
-
-Analyze Kraken output (again) to determine microcystis and ADA-clade contigs for all contigs in assembly
-```{r}
-
-#Gather all Kraken output files
-kraken_paths <- system("ls /geomicro/data2/pdenuyl2/CIGLR_bioinformatics/2025/SagBay/kraken/set_41/output/set41_contigs_pluspf/*_output.txt", intern = TRUE) %>% 
-  tibble(output_path = .) 
-
-# Read and combine all .txt files into a single data frame
-# Initialize an empty data frame to store results
-combined_kraken_output_mcy <- tibble() 
-
-# Loop through each file path and append data
-for (path in kraken_paths$output_path) {
-  # Read the file with generic column names
-  file_data <- read_delim(path, delim = "\t", col_names = FALSE, show_col_types = FALSE) %>%
-    mutate(source_file = basename(path)) 
-
-  # Append to combined_data
-  combined_kraken_output_mcy <- bind_rows(combined_kraken_output_mcy, file_data) %>% filter(str_detect(X3, "Microcystis"))   # Filter rows containing "Microcystis" annotations in column 3
-}
-
-#Rename columns:
-combined_kraken_output_mcy_rename <- combined_kraken_output_mcy %>%
-                                      rename("contig" = "X2",
-                                             "kraken_tax" = "X3") 
-                                            
 ```
 
 Process blastn output (from microcystis contigs) to extract hits for each gene of interest on samp_4400_818442_Lake_Huron_gvpAC_contig_extract contig - identify top hits and coordinates on contig
@@ -549,10 +480,5 @@ writeXStringSet(extracted_gene, output_fasta)
 } 
 
 ```
-Align extracted genes (by gene_target)
-```{r}
 
-
-
-```
 
