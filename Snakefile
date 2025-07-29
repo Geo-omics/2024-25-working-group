@@ -52,6 +52,10 @@ rule run_drep:
 rule run_kofamscan:
     input: expand("data/metabat2/{SampleID}/kofamscan/{genome}_kofam_results.txt", SampleID = samples, genome = genomes)
 
+rule run_kraken2_reads:
+    input: expand("data/kraken2_reads/{SampleID}_kraken2_report.txt", SampleID = samples)
+
+
 # Make a graph of all our rules
 rule make_rulegraph:
     output:
@@ -585,3 +589,33 @@ rule run_kraken2_microcystis_set41_contigs_pluspf:
     input: 
         expand("kraken/set_41/output/set41_contigs_pluspf/{contig_name}_kraken2_output.txt", contig_name = glob_wildcards("kraken/set_41/megahit_assemblies/{sample}.fa",followlinks=True).sample)
 
+
+
+rule kraken2_refseq:
+    input:
+        fwd_reads = "data/fastqs/{sample}_decon_fwd.fastq.gz",
+        rev_reads = "data/fastqs/{sample}_decon_rev.fastq.gz",
+        db = "/geomicro/data2/kiledal/GLAMR/data/reference/kraken_databases/core_nt_202505"
+    output: 
+        kraken_res = "data/kraken2_reads/{sample}_kraken2_output.txt",
+        kraken_report = "data/kraken2_reads/{sample}_kraken2_report.txt"
+    conda: "config/conda/kraken2.yaml"
+    resources:
+        cpus = 48, 
+        mem_mb = 640000, 
+        time_min = 10000
+    log: "logs/kraken2/{sample}.log"
+    benchmark: "benchmarks/kraken2/{sample}.log"
+    shell:
+        """
+        printf "Running sample: {wildcards.sample} \n"
+
+        kraken2 \
+            --threads {resources.cpus} \
+            --output {output.kraken_res} \
+            --report {output.kraken_report} \
+            --report-minimizer-data \
+            --minimum-hit-groups 3 \
+            --db {input.db} \
+            --paired {input.fwd_reads} {input.rev_reads} 2>&1 | tee {log}
+        """
