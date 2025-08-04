@@ -55,6 +55,9 @@ rule run_kofamscan:
 rule run_kraken2_reads:
     input: expand("data/kraken2_reads/{SampleID}_kraken2_report.txt", SampleID = samples)
 
+rule run_bracken_reads:
+    input: expand("data/kraken2_reads/{SampleID}_bracken_mpa.tsv", SampleID = samples)
+
 
 # Make a graph of all our rules
 rule make_rulegraph:
@@ -618,4 +621,32 @@ rule kraken2_refseq:
             --minimum-hit-groups 3 \
             --db {input.db} \
             --paired {input.fwd_reads} {input.rev_reads} 2>&1 | tee {log}
+        """
+
+rule bracken:
+    input:
+        report = "data/kraken2_reads/{sample}_kraken2_report.txt",
+        db = "/geomicro/data2/kiledal/GLAMR/data/reference/kraken_databases/core_nt_202505",
+        kreport2mpa = "code/kreport2mpa.py"
+    output:
+        bracken_input = "data/kraken2_reads/{sample}_bracken_input.tsv",
+        bracken = "data/kraken2_reads/{sample}_bracken.tsv",
+        bracken_report = "data/kraken2_reads/{sample}_bracken_report.txt",
+        bracken_mpa = "data/kraken2_reads/{sample}_bracken_mpa.tsv"
+    params:
+        uniq_minimizer_threshold = 150
+    conda: "config/conda/kraken2.yaml"
+    resources:
+        cpus = 1, 
+        mem_mb = 24000, 
+        time_min = 1000
+    log: "logs/bracken/{sample}.log"
+    benchmark: "benchmarks/bracken/{sample}.log"
+    shell:
+        """
+        awk '{{ if($5 >= {params.uniq_minimizer_threshold}) {{ print }}}}' {input.report} | cut --complement -f4,5 > {output.bracken_input}
+
+        bracken -d {input.db} -i {output.bracken_input} -o {output.bracken} -w {output.bracken_report}
+
+        ./{input.kreport2mpa} -r {output.bracken_report} -o {output.bracken_mpa} --percentages
         """
