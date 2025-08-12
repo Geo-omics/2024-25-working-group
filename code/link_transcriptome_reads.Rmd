@@ -1,0 +1,23 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+Link transcriptome reads from GLAMR to working group folder
+```{r}
+
+# Find reads in GLAMR and make column with a path to where they should be linked in the working group directory
+read_df <- Sys.glob("/geomicro/data2/kiledal/GLAMR/data/projects/set_62/metatranscriptomes/*/reads/decon_*_reads_fastp.fastq.gz") %>% 
+  data.frame(path = .) %>% 
+  unglue::unglue_unnest(path, "/geomicro/data2/kiledal/GLAMR/data/projects/{StudyID}/metatranscriptomes/{SampleID}/reads/decon_{read_direction}_reads_fastp.fastq.gz",remove = FALSE) %>% 
+  mutate(link_path = str_glue("/geomicro/data2/kiledal/projects/2024_working_group/data/transcriptomes/{SampleID}_{read_direction}.fastq.gz"))
+
+# Make directory to link reads into
+read_df$link_path %>% dirname() %>% unique() %>% fs::dir_create()
+
+# Link the reads
+fs::link_create(read_df$path, read_df$link_path)
+
+```
+
