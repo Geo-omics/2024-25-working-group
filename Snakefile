@@ -13,6 +13,9 @@ samples="samp_447"
 
 genomes = glob_wildcards("data/metabat2/{SampleID}/{genome}.fa").genome
 
+# Get a list of metatrancritome samples
+metaT_samples = glob_wildcards("data/transcriptomes/{sample}_fwd.fastq.gz").sample
+
 # Get a list of directions from fastq files
 directions = glob_wildcards("data/fastqs/{SampleID}_{direction}.fastq.gz").direction
 
@@ -57,6 +60,12 @@ rule run_kraken2_reads:
 
 rule run_bracken_reads:
     input: expand("data/kraken2_reads/{SampleID}_bracken_mpa.tsv", SampleID = samples)
+
+rule run_map_metaT_reads:
+    input: expand("data/transcriptome_bams/GCF_002095975/{sample}.bam", sample = metaT_samples) # GCF_002095975 is a specific genome, could replace with wildcard to map to multiple genomes
+
+rule run_featurecounts:
+    input: expand("data/transcriptome_counts/GCF_002095975/{sample}.counts.txt", sample = metaT_samples) # GCF_002095975 is a specific genome, could replace with wildcard to map to multiple genomes
 
 
 # Make a graph of all our rules
@@ -649,4 +658,57 @@ rule bracken:
         bracken -d {input.db} -i {output.bracken_input} -o {output.bracken} -w {output.bracken_report}
 
         ./{input.kreport2mpa} -r {output.bracken_report} -o {output.bracken_mpa} --percentages
+        """
+
+
+rule map_metaT_reads:
+    input:
+        ref = "data/reference/genomes/{genome}/{genome}.fna",
+        fwd_reads = "data/transcriptomes/{sample}_fwd.fastq.gz",
+        rev_reads = "data/transcriptomes/{sample}_rev.fastq.gz"
+    output:
+        sam = temp("data/transcriptome_bams/{genome}/{sample}.sam"),
+        temp_bam = temp("data/transcriptome_bams/{genome}/{sample}.temp.bam"),
+        unsorted_bam = temp("data/transcriptome_bams/{genome}/{sample}.unsorted.bam"),
+        bam = "data/transcriptome_bams/{genome}/{sample}.bam"
+    log: "logs/map_metaT_reads/{genome}__{sample}.log"
+    benchmark: "benchmarks/map_metaT_reads/{genome}__{sample}.log"
+    conda: "config/conda/minimap2.yaml"
+    resources: cpus = 16, mem_mb = 4000, time_min = 180
+    shell:
+        """
+        minimap2 \
+            -ax splice:sr \
+            {input.ref} \
+            {input.fwd_reads} {input.rev_reads} > {output.sam}        # paired-end
+
+        samtools view -bS {output.sam} > {output.temp_bam}
+
+        filterBam \
+            --in {output.temp_bam} \
+            --out {output.unsorted_bam} \
+            --minCover 50 \
+            --minId 90
+
+        samtools sort -o {output.bam} -@ {resources.cpus} {output.unsorted_bam}
+        samtools index -@ {resources.cpus} {output.bam}
+        """
+
+
+rule featureCounts:
+    input:
+        bam = "data/transcriptome_bams/{genome}/{sample}.bam",
+        gtf = "data/reference/genomes/{genome}/{genome}.gff3"
+    output:
+        counts = "data/transcriptome_counts/{genome}/{sample}.counts.txt"
+    log: "logs/featureCounts/{genome}__{sample}.log"
+    conda: "config/conda/featurecounts.yaml"
+    resources: cpus = 16, mem_mb = 4000, time_min = 180
+    shell:
+        """
+        featureCounts \
+           -a {input.gtf} \ 
+           -g ID \
+           -o {output.counts} \
+           {input.bam}
         """

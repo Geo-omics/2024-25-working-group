@@ -21,3 +21,29 @@ fs::link_create(read_df$path, read_df$link_path)
 
 ```
 
+
+```{r}
+header = c("id",	"type",	"start",	"stop", "strand", "locus_tag",	"gene", "product", "x_refs")
+
+gtf_file <- read_tsv("/geomicro/data2/kiledal/projects/2024_working_group/data/reference/genomes/GCF_002095975/GCF_002095975.tsv",skip = 5) %>% #col_names = header)
+  janitor::clean_names()
+
+annotations <- gtf_file %>% 
+  #separate_wider_delim(x_refs, delim = ";", names= c("ID","Name","locus_tag","product","DBxref"),too_few = "align_start",too_many = "drop",names_sep = "|") #%>% 
+    select(GeneID = "locus_tag",Chr = "number_sequence_id",Start = "start",End = "stop", Strand = "strand") %>% 
+    filter(!is.na(GeneID))
+
+mapping_counts <- Rsubread::featureCounts(files = "/geomicro/data2/kiledal/projects/2024_working_group/data/transcriptome_bams/GCF_002095975/samp_4514.bam",annot.ext = annotations
+                                          #annot.ext = "/geomicro/data2/kiledal/projects/2024_working_group/data/reference/genomes/GCF_002095975/GCF_002095975.gff3",
+                                          #isGTFAnnotationFile = TRUE,
+                                          #GTF.featureType = "locus_tag"
+                                          )
+
+mapping_counts_table <- mapping_counts$counts %>% 
+  as.data.frame()
+
+```
+
+
+
+
