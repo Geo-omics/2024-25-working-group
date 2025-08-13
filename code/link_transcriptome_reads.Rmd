@@ -1,10 +1,12 @@
 ---
-title: "R Notebook"
+title: "Transcriptomics"
 output: html_notebook
 ---
 
+# Transcriptomics
+Here we'll map metatranscriptomic reads to a reference genome to evaluate gene expression.
 
-Link transcriptome reads from GLAMR to working group folder
+## Link transcriptome reads from GLAMR to working group folder
 ```{r}
 
 # Find reads in GLAMR and make column with a path to where they should be linked in the working group directory
@@ -22,27 +24,61 @@ fs::link_create(read_df$path, read_df$link_path)
 ```
 
 
-```{r}
-header = c("id",	"type",	"start",	"stop", "strand", "locus_tag",	"gene", "product", "x_refs")
+## Transcriptome abundance results
 
-gtf_file <- read_tsv("/geomicro/data2/kiledal/projects/2024_working_group/data/reference/genomes/GCF_002095975/GCF_002095975.tsv",skip = 5) %>% #col_names = header)
+### FeatureCounts results
+```{r}
+bakta_annotations <- read_tsv("/geomicro/data2/kiledal/projects/2024_working_group/data/reference/genomes/GCF_002095975/GCF_002095975.tsv",skip = 5) %>% #col_names = header)
   janitor::clean_names()
 
-annotations <- gtf_file %>% 
-  #separate_wider_delim(x_refs, delim = ";", names= c("ID","Name","locus_tag","product","DBxref"),too_few = "align_start",too_many = "drop",names_sep = "|") #%>% 
-    select(GeneID = "locus_tag",Chr = "number_sequence_id",Start = "start",End = "stop", Strand = "strand") %>% 
-    filter(!is.na(GeneID))
-
-mapping_counts <- Rsubread::featureCounts(files = "/geomicro/data2/kiledal/projects/2024_working_group/data/transcriptome_bams/GCF_002095975/samp_4514.bam",annot.ext = annotations
-                                          #annot.ext = "/geomicro/data2/kiledal/projects/2024_working_group/data/reference/genomes/GCF_002095975/GCF_002095975.gff3",
-                                          #isGTFAnnotationFile = TRUE,
-                                          #GTF.featureType = "locus_tag"
+mapping_counts <- Rsubread::featureCounts(files =Sys.glob("/geomicro/data2/kiledal/projects/2024_working_group/data/transcriptome_bams/GCF_002095975/samp_4527.bam"), 
+                                          #Sys.glob("/geomicro/data2/kiledal/projects/2024_working_group/data/transcriptome_bams/GCF_002095975/samp_*.bam"),
+                                          annot.ext = "/geomicro/data2/kiledal/projects/2024_working_group/data/reference/genomes/GCF_002095975/GCF_002095975.gff3",
+                                          isGTFAnnotationFile = TRUE,
+                                          GTF.featureType = "CDS",
+                                          GTF.attrType = "ID",
+                                          isPairedEnd = TRUE
                                           )
 
 mapping_counts_table <- mapping_counts$counts %>% 
-  as.data.frame()
+  as.data.frame() %>% 
+  rownames_to_column("locus_tag") %>% 
+  left_join(bakta_annotations) %>% 
+  mutate(length = stop -start,
+         length_kb = length / 1000,
+         reads_per_kilobase = samp_4527.bam / length_kb,
+         tpm_featurecount = reads_per_kilobase / (sum(reads_per_kilobase) / 1000000)
+         )
 
 ```
+
+### Salmon results
+```{r}
+salmon_output <- tximport::tximport("/geomicro/data2/kiledal/projects/2024_working_group/data/salmon_quant/GCF_002095975/samp_4527/quant.sf",type = "salmon",txOut=TRUE,countsFromAbundance = "scaledTPM")
+
+salmon_df <- salmon_output$abundance %>% 
+  data.frame(salmon_tpm = .) %>% 
+  rownames_to_column("locus_tag")
+
+salmon_output
+```
+
+
+### Compare abundances obtained from FeatureCounts and Salmon
+```{r}
+combined_abund <- salmon_df %>% left_join(mapping_counts_table)
+
+combined_abund %>% 
+  ggplot(aes(salmon_tpm, tpm_featurecount)) +
+  geom_point() +
+  scale_x_log10() +
+  scale_y_log10() +
+  geom_abline(slope = 1,color = "red") + # Add a line of equivalence to the plot
+  theme_bw() +
+  labs(x = "TPM from Salmon",
+       y = "TPM from FeatureCounts")
+```
+
 
 
 

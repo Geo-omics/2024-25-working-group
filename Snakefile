@@ -67,7 +67,6 @@ rule run_map_metaT_reads:
 rule run_featurecounts:
     input: expand("data/transcriptome_counts/GCF_002095975/{sample}.counts.txt", sample = metaT_samples) # GCF_002095975 is a specific genome, could replace with wildcard to map to multiple genomes
 
-
 # Make a graph of all our rules
 rule make_rulegraph:
     output:
@@ -702,13 +701,20 @@ rule featureCounts:
     output:
         counts = "data/transcriptome_counts/{genome}/{sample}.counts.txt"
     log: "logs/featureCounts/{genome}__{sample}.log"
+    benchmark: "benchmarks/featureCounts/{genome}__{sample}.log"
     conda: "config/conda/featurecounts.yaml"
     resources: cpus = 16, mem_mb = 4000, time_min = 180
     shell:
         """
         featureCounts \
-           -a {input.gtf} \ 
+           -a {input.gtf} \
+           -t CDS \
            -g ID \
+           -p \
+           --countReadPairs \
            -o {output.counts} \
            {input.bam}
         """
+
+
+
