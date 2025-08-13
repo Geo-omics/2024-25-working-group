@@ -67,6 +67,9 @@ rule run_map_metaT_reads:
 rule run_featurecounts:
     input: expand("data/transcriptome_counts/GCF_002095975/{sample}.counts.txt", sample = metaT_samples) # GCF_002095975 is a specific genome, could replace with wildcard to map to multiple genomes
 
+rule run_salmon:
+    input: expand("data/salmon_quant/GCF_002095975/.{sample}.done", sample = metaT_samples) # GCF_002095975 is a specific genome, could replace with wildcard to map to multiple genomes
+
 # Make a graph of all our rules
 rule make_rulegraph:
     output:
@@ -716,5 +719,52 @@ rule featureCounts:
            {input.bam}
         """
 
+rule salmon_index:
+    input:
+        ref = "data/reference/genomes/{genome}/{genome}.fna",
+        transcriptome = "data/reference/genomes/{genome}/{genome}.ffn"
+    output:
+        done = touch("data/reference/genomes/{genome}/{genome}/salmon_index/.done"),
+    params:
+        index = "data/reference/genomes/{genome}/{genome}/salmon_index/{genome}",
+        index_dir = "data/reference/genomes/{genome}/{genome}/salmon_index"
+    log: "logs/salmon_index/{genome}.log"
+    benchmark: "benchmarks/salmon_index/{genome}.log"
+    conda: "config/conda/salmon.yaml"
+    resources: cpus = 16, mem_mb = 4000, time_min = 180
+    shell:
+        """
+        # Get list of contig headers in genome for decoy file
+        grep "^>" {input.ref} | cut -d " " -f 1 > {params.index_dir}/decoys.txt
+        sed -i.bak -e 's/>//g' {params.index_dir}/decoys.txt
 
+        # make directory for index
+        mkdir -p {params.index_dir}
+
+        # Combine transcripts and genome into single file for indexing
+        cat {input.transcriptome} {input.ref} > {params.index_dir}/for_index.fa
+
+        # Build index
+        salmon index -t {params.index_dir}/for_index.fa -i {params.index} --decoys {params.index_dir}/decoys.txt -k 31
+        """
+
+rule salmon_quant:
+    input:
+        ref = "data/reference/genomes/{genome}/{genome}.fna",
+        transcriptome = "data/reference/genomes/{genome}/{genome}.ffn",
+        fwd_reads = "data/transcriptomes/{sample}_fwd.fastq.gz",
+        rev_reads = "data/transcriptomes/{sample}_rev.fastq.gz"
+    output:
+        done = touch("data/salmon_quant/{genome}/.{sample}.done")
+    params:
+        index = "data/reference/genomes/{genome}/{genome}/salmon_index/{genome}",
+        output = "data/salmon_quant/{genome}/{sample}"
+    log: "logs/salmon_index/{genome}__{sample}.log"
+    benchmark: "benchmarks/salmon_quant/{genome}__{sample}.log"
+    conda: "config/conda/salmon.yaml"
+    resources: cpus = 16, mem_mb = 4000, time_min = 180
+    shell:
+        """
+        salmon quant -i {params.index} --libType A -1 {input.fwd_reads} -2 {input.rev_reads} --validateMappings -o {params.output} -p {resources.cpus}
+        """
 
