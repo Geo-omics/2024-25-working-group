@@ -3,6 +3,18 @@ title: "Transcriptomics"
 output: html_notebook
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = here::here("~/projects/2024_working_group/"))
+library(tidyverse)
+library(glue)
+library(googledrive)
+library(patchwork)
+library(DESeq2)
+
+pg <- DBI::dbConnect(RPostgres::Postgres(),dbname = "glamr_data", host = "localhost", port = "5432", user = "glamr_admin", password = "glamr2023")
+conflicted::conflicts_prefer(dplyr::select(), dplyr::rename(), dplyr::filter(), dplyr::lag())
+```
+
 # Transcriptomics
 Here we'll map metatranscriptomic reads to a reference genome to evaluate gene expression.
 
@@ -27,6 +39,48 @@ fs::link_create(read_df$path, read_df$link_path)
 ## Transcriptome abundance results
 
 ### FeatureCounts results
+
+#### Read in from files
+```{r}
+
+bakta_annotations <- read_tsv("/geomicro/data2/kiledal/projects/2024_working_group/data/reference/genomes/GCF_002095975/GCF_002095975.tsv",skip = 5) %>% #col_names = header)
+  janitor::clean_names()
+
+featurecount_files <- Sys.glob("/geomicro/data2/kiledal/projects/2024_working_group/data/transcriptome_counts/*/*.counts.txt") %>% 
+  data.frame(path = .) %>% 
+  unglue::unglue_unnest(path, "/geomicro/data2/kiledal/projects/2024_working_group/data/transcriptome_counts/{reference}/{SampleID}.counts.txt",remove = FALSE)
+
+path = featurecount_files$path[1]
+sample_name = featurecount_files$SampleID[1]
+
+read_counts <- function(path,sample_name){
+  counts_table <- read_tsv(path,comment = "#") %>% 
+    mutate(SampleID = sample_name) %>% 
+    rename_with(.cols = dplyr::contains(".bam"), .fn = ~paste0("count"))
+}
+
+counts_df <- map2_df(featurecount_files$path, featurecount_files$SampleID, read_counts)
+
+counts_w_norm <- counts_df %>% 
+  group_by(SampleID) %>% 
+  mutate(length_kb = Length / 1000,
+         reads_per_kilobase = count / length_kb,
+         tpm_featurecount = reads_per_kilobase / (sum(reads_per_kilobase) / 1000000),
+         per_million = count / 1000000,
+         reads_per_million = count / per_million, 
+         rpkm = reads_per_million / length_kb
+         ) %>% 
+  left_join(bakta_annotations %>% rename(Geneid = "locus_tag"))
+  
+
+
+counts_wide <- counts_df %>% 
+  pivot_wider(names_from = "SampleID", values_from = "count",values_fill = 0)
+
+```
+
+
+#### Using rsubread
 ```{r}
 bakta_annotations <- read_tsv("/geomicro/data2/kiledal/projects/2024_working_group/data/reference/genomes/GCF_002095975/GCF_002095975.tsv",skip = 5) %>% #col_names = header)
   janitor::clean_names()
@@ -54,7 +108,11 @@ mapping_counts_table <- mapping_counts$counts %>%
 
 ### Salmon results
 ```{r}
-salmon_output <- tximport::tximport("/geomicro/data2/kiledal/projects/2024_working_group/data/salmon_quant/GCF_002095975/samp_4527/quant.sf",type = "salmon",txOut=TRUE,countsFromAbundance = "scaledTPM")
+
+sample_names <- Sys.glob("/geomicro/data2/kiledal/projects/2024_working_group/data/salmon_quant/GCF_002095975/*/quant.sf") %>% 
+  unglue::unglue_data("/geomicro/data2/kiledal/projects/2024_working_group/data/salmon_quant/GCF_002095975/{sample}/quant.sf")
+
+salmon_output <- tximport::tximport(Sys.glob("/geomicro/data2/kiledal/projects/2024_working_group/data/salmon_quant/GCF_002095975/*/quant.sf"),type = "salmon",txOut=TRUE,countsFromAbundance = "lengthScaledTPM")
 
 salmon_df <- salmon_output$abundance %>% 
   data.frame(salmon_tpm = .) %>% 
@@ -78,6 +136,238 @@ combined_abund %>%
   labs(x = "TPM from Salmon",
        y = "TPM from FeatureCounts")
 ```
+
+
+```{r}
+set_62_sample_info <- tbl(pg, "glamr_samples") %>% 
+  filter(StudyID == "set_62") %>% 
+  collect() %>% 
+  select(where(~!all(is.na(.)))) %>% # select only columns where all values are not NA
+  mutate(collection_hour = lubridate::hour(date),
+         day_or_night = case_when(collection_hour >= 7 & collection_hour <= 21 ~ "day",
+                                  collection_hour < 7 | collection_hour > 21 ~ "night"))
+
+set_62_sample_info %>% 
+  ggplot(aes(date, 1, color = day_or_night)) +
+  geom_point()
+
+
+
+metadata_from_paper <- readxl::read_excel("data/metadata/zepernick_MRA_table_diel_Erie_metaT.xlsx") %>% 
+  janitor::clean_names() %>% 
+  mutate(time_sampled = hms::as_hms(time_sampled),
+         sample_date_and_time = as_datetime(date_sampled + time_sampled)) %>% 
+  left_join(combined_metrics %>% select(library_id = `Library Name`, sample)) %>% 
+  left_join(metadata_for_deseq2 %>% select(sample, glamr_date = date)) %>% 
+  mutate(collection_hour = lubridate::hour(sample_date_and_time),
+         day_or_night = case_when(collection_hour >= 7 & collection_hour <= 21 ~ "day",
+                                  collection_hour < 7 | collection_hour > 21 ~ "night"))
+
+metadata_from_paper %>% 
+  filter(sample_date_and_time > mdy("07-17-2023")) %>% 
+  ggplot(aes(sample_date_and_time, 1, color = day_or_night)) +
+  geom_jitter(width = 0, height = .2) +
+  scale_y_continuous(limits = c(0, 2))
+```
+
+## Differential expression with deseq2
+```{r}
+
+tpm_featurecounts <- counts_w_norm %>% 
+  select(Geneid,SampleID, tpm_featurecount) %>% 
+  pivot_wider(names_from = "SampleID",values_from = "tpm_featurecount",values_fill = 0) %>% 
+  column_to_rownames("Geneid")
+
+length_featurecounts <- counts_w_norm %>% 
+  select(Geneid,SampleID, Length) %>% 
+  pivot_wider(names_from = "SampleID",values_from = "Length",values_fill = 0) %>% 
+  column_to_rownames("Geneid")
+
+count_featurecounts <- counts_w_norm %>% 
+  select(Geneid,SampleID, count) %>% 
+  pivot_wider(names_from = "SampleID",values_from = "count",values_fill = 0) %>% 
+  column_to_rownames("Geneid")
+
+
+
+metadata_for_deseq2 <- set_62_sample_info %>% 
+  filter(!is.na(day_or_night)) %>% 
+  column_to_rownames("SampleID")
+
+metadata_for_deseq2 <- metadata_from_paper %>% 
+  filter(!is.na(day_or_night),
+         !is.na(sample)) %>% 
+  column_to_rownames("sample")
+
+samples <- base::intersect(colnames(count_featurecounts),rownames(metadata_for_deseq2))
+
+data_for_deseq <-   DESeqDataSetFromMatrix(count_featurecounts[,samples],colData = metadata_for_deseq2[samples,],design = ~day_or_night)
+  
+deseq_res <- DESeq(data_for_deseq)
+
+deseq_res_df <- results(deseq_res,contrast = c("day_or_night","day","night")) %>% 
+  as.data.frame() %>% 
+  rownames_to_column("locus_tag") %>% 
+  left_join(bakta_annotations)
+
+
+deseq_res_df %>% 
+  ungroup() %>% 
+  ggplot(aes(log2FoldChange,-log10(padj))) +
+  geom_point() +
+  geom_hline(yintercept = -log10(0.05),color = "red") +
+  geom_label(data = . %>% 
+               filter(!is.na(product),!is.na(padj)) %>%  
+               slice_max(order_by = abs(log2FoldChange), # * -log10(padj) if want to consider significant in addition
+                         n = 10),  
+             aes(label = str_wrap(product,10)), force = 10, size =2) +
+  theme_bw()
+
+
+```
+
+```{r}
+counts_w_norm %>% 
+  left_join(set_62_sample_info) %>% 
+  filter(gene =="cpcB") %>% 
+  group_by(date, sample, day_or_night, gene) %>% 
+  summarise(tpm_featurecount = sum(tpm_featurecount)) %>% 
+  ungroup() %>% 
+  ggplot(aes(date, tpm_featurecount, color = day_or_night, group = "1")) +
+  geom_rect(aes(xmin = lubridate::ymd_hms("2023-07-18 02:00:00") ,xmax = lubridate::ymd_hms("2023-07-18 06:00:00"), ymax = max(tpm_featurecount), ymin = 0), fill = "grey60",inherit.aes = FALSE,alpha = 0.01) +
+  geom_rect(aes(xmin = lubridate::ymd_hms("2023-07-18 22:00:00") ,xmax = lubridate::ymd_hms("2023-07-19 06:00:00"), ymax = max(tpm_featurecount), ymin = 0), fill = "grey60",inherit.aes = FALSE,alpha = 0.01) +
+  geom_rect(aes(xmin = lubridate::ymd_hms("2023-07-19 22:00:00") ,xmax = lubridate::ymd_hms("2023-07-20 06:00:00"), ymax = max(tpm_featurecount), ymin = 0), fill = "grey60",inherit.aes = FALSE, alpha = 0.01) +
+  geom_point()+
+  #geom_line() +
+  geom_smooth() +
+  theme_bw() +
+  labs(y = "TPM", x = NULL, color = NULL)
+```
+
+## Enrichments
+
+```{r}
+bakta_cross_refs <- bakta_annotations %>% 
+  separate_longer_delim(db_xrefs,delim = ", ") %>% 
+  separate(col = db_xrefs,into = c("xref_source","xref_id"),sep = ":")
+
+kegg_xrefs <- bakta_cross_refs %>% 
+  filter(xref_source == "KEGG")
+
+cog_xrefs <- bakta_cross_refs %>% 
+  filter(xref_source == "COG")
+
+GO_xrefs <- bakta_cross_refs %>% 
+  filter(xref_source == "GO")
+```
+
+### KEGG enrichemnts
+```{r}
+library(gage)
+kegg_def <- kegg.gsets(species="ko")
+```
+
+```{r}
+
+deseq_w_kegg <- deseq_res_df %>% 
+  inner_join(kegg_xrefs) %>% 
+  select(log2FoldChange,xref_id) %>% 
+  arrange(desc(log2FoldChange))
+
+deseq_kegg_vec <- deseq_w_kegg$log2FoldChange %>% `names<-`(deseq_w_kegg$xref_id)
+
+
+enrichment <- gage(deseq_w_kegg$log2FoldChange %>%  `names<-`(deseq_w_kegg$xref_id), gsets = kegg_def$kg.sets, ref = NULL, samp = NULL,species = "ko")
+
+enriched_df = bind_rows(enrichment[["greater"]] %>% as.data.frame() %>% rownames_to_column("pathway") %>% mutate(enrichment = "Enriched"),
+                             enrichment[["less"]] %>% as.data.frame() %>% rownames_to_column("pathway") %>%  mutate(enrichment = "Depleted")) %>% 
+  filter(!is.na(p.val)) 
+
+enriched_df %>% 
+  group_by(pathway) %>% 
+  slice_min(order_by = p.val, n = 1) %>% 
+  mutate(sig = p.val < 0.05) %>% 
+  ggplot(aes(stat.mean,reorder(pathway,stat.mean),fill = sig)) +
+  geom_bar(stat = "identity") +
+  theme_bw()
+
+```
+
+
+
+
+
+```{r}
+
+sra_set_62 <- read_csv("~/projects/glamr_queries_and_analyses/set_62_sra.csv") %>% 
+  arrange(Bases) %>% 
+  filter(!`Library Name` %in% c("LE_1", "LE_6")) %>% 
+  #filter(Bases != 2760047158,
+  #       Bases != 1356778488) %>% 
+  mutate(row_num = row_number())
+
+set_62_read_counts <- tbl(pg, "read_count") %>% 
+  filter(read_state == "raw_reads",
+         direction == "fwd",
+         sample %in% local(set_62_sample_info$sample)) %>% 
+  arrange(count) %>% 
+  collect() %>% 
+  mutate(row_num = row_number())
+
+
+combined_metrics <- bind_cols(sra_set_62 %>% select(Bases, row_num,`Library Name`,Run,BioSample,BioProject)) %>% 
+  left_join(set_62_read_counts %>% select(count, row_num,sample))
+
+
+(combined_metrics %>% 
+  # filter(Bases != 42500448222,
+  #        Bases != 30601526516) %>% 
+  ggplot(aes(Bases, count * 300, color = row_num)) +
+  geom_abline(slope = 1) + 
+  scale_x_log10() +
+  scale_y_log10() +
+  geom_point()
+) %>% plotly::ggplotly()
+
+combined_metrics <- bind_rows(sra_set_62 %>% 
+                                mutate(source = "sra",
+                                       count = round(Bases)) %>% 
+                                select(count, source,sample = Run, samp_name = `Sample Name`,lib = `Library Name`),
+                              set_62_read_counts %>% select(count, sample) %>% 
+                                mutate(source = "glamr",
+                                       count = as.double(count) * 300)) %>% 
+  arrange(-count)
+
+
+(combined_metrics %>% 
+  ggplot(aes(count,source, label = sample, id = lib, samp_name = samp_name)) +
+  geom_point()
+) %>% plotly::ggplotly()
+
+
+fastqs <- Sys.glob("~/GLAMR/data/projects/set_62/metatranscriptomes/*/reads/raw_fwd_reads.fastq.gz") %>% 
+  data.frame(path = .) %>% 
+  unglue::unglue_unnest(path, "/geomicro/data2/kiledal/GLAMR/data/projects/set_62/metatranscriptomes/{sample}/reads/raw_fwd_reads.fastq.gz",remove = FALSE)
+
+get_fastq_header <- function(path){
+  header <- Biostrings::readDNAStringSet(path,nrec = 1,format = "fastq") %>% 
+    names() %>% 
+    data.frame(header = .) %>% 
+    unglue::unglue_unnest(header, 
+                          "{instrument}:{run_number}:{flowcell_id}:{lane}:{tile}:{x_pos}:{y_pos} {read}:{is_filtered}:{control_number}:{barcode}")
+}
+
+fastq_header_examples <- fastqs %>% 
+  mutate(header_nested = map(path, get_fastq_header)) %>% 
+  unnest(header_nested)
+
+
+
+```
+
+
+
+
 
 
 
