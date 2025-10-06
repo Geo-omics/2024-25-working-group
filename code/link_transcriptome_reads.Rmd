@@ -42,7 +42,6 @@ fs::link_create(read_df$path, read_df$link_path)
 
 #### Read in from files
 ```{r}
-
 bakta_annotations <- read_tsv("/geomicro/data2/kiledal/projects/2024_working_group/data/reference/genomes/GCF_002095975/GCF_002095975.tsv",skip = 5) %>% #col_names = header)
   janitor::clean_names()
 
@@ -71,8 +70,6 @@ counts_w_norm <- counts_df %>%
          rpkm = reads_per_million / length_kb
          ) %>% 
   left_join(bakta_annotations %>% rename(Geneid = "locus_tag"))
-  
-
 
 counts_wide <- counts_df %>% 
   pivot_wider(names_from = "SampleID", values_from = "count",values_fill = 0)
@@ -108,7 +105,6 @@ mapping_counts_table <- mapping_counts$counts %>%
 
 ### Salmon results
 ```{r}
-
 sample_names <- Sys.glob("/geomicro/data2/kiledal/projects/2024_working_group/data/salmon_quant/GCF_002095975/*/quant.sf") %>% 
   unglue::unglue_data("/geomicro/data2/kiledal/projects/2024_working_group/data/salmon_quant/GCF_002095975/{sample}/quant.sf")
 
@@ -153,7 +149,7 @@ set_62_sample_info %>%
 
 
 
-metadata_from_paper <- readxl::read_excel("data/metadata/zepernick_MRA_table_diel_Erie_metaT.xlsx") %>% 
+metadata_from_paper <- readxl::read_excel("/geomicro/data2/kiledal/projects/2024_working_group/data/metadata/zepernick_MRA_table_diel_Erie_metaT.xlsx") %>% 
   janitor::clean_names() %>% 
   mutate(time_sampled = hms::as_hms(time_sampled),
          sample_date_and_time = as_datetime(date_sampled + time_sampled)) %>% 
@@ -201,7 +197,9 @@ metadata_for_deseq2 <- metadata_from_paper %>%
 
 samples <- base::intersect(colnames(count_featurecounts),rownames(metadata_for_deseq2))
 
-data_for_deseq <-   DESeqDataSetFromMatrix(count_featurecounts[,samples],colData = metadata_for_deseq2[samples,],design = ~day_or_night)
+data_for_deseq <-   DESeqDataSetFromMatrix(count_featurecounts[,samples],
+                                           colData = metadata_for_deseq2[samples,],
+                                           design = ~day_or_night)
   
 deseq_res <- DESeq(data_for_deseq)
 
@@ -211,19 +209,19 @@ deseq_res_df <- results(deseq_res,contrast = c("day_or_night","day","night")) %>
   left_join(bakta_annotations)
 
 
-deseq_res_df %>% 
+(volcano_plt <- deseq_res_df %>% 
   ungroup() %>% 
-  ggplot(aes(log2FoldChange,-log10(padj))) +
+  ggplot(aes(log2FoldChange,-log10(padj), product = product)) +
   geom_point() +
   geom_hline(yintercept = -log10(0.05),color = "red") +
-  geom_label(data = . %>% 
+  geom_label(data = . %>% # these labels don't map to plotly's interactive view well, comment that out to make a static plot
                filter(!is.na(product),!is.na(padj)) %>%  
                slice_max(order_by = abs(log2FoldChange), # * -log10(padj) if want to consider significant in addition
                          n = 10),  
              aes(label = str_wrap(product,10)), force = 10, size =2) +
   theme_bw()
-
-
+) %>% plotly::ggplotly()
+  
 ```
 
 ```{r}
@@ -258,7 +256,8 @@ cog_xrefs <- bakta_cross_refs %>%
   filter(xref_source == "COG")
 
 GO_xrefs <- bakta_cross_refs %>% 
-  filter(xref_source == "GO")
+  filter(xref_source == "GO") %>% 
+  mutate(GOID = paste0("GO:",xref_id))
 ```
 
 ### KEGG enrichemnts
@@ -277,7 +276,7 @@ deseq_w_kegg <- deseq_res_df %>%
 deseq_kegg_vec <- deseq_w_kegg$log2FoldChange %>% `names<-`(deseq_w_kegg$xref_id)
 
 
-enrichment <- gage(deseq_w_kegg$log2FoldChange %>%  `names<-`(deseq_w_kegg$xref_id), gsets = kegg_def$kg.sets, ref = NULL, samp = NULL,species = "ko")
+enrichment <- gage(deseq_kegg_vec, gsets = kegg_def$kg.sets, ref = NULL, samp = NULL,species = "ko")
 
 enriched_df = bind_rows(enrichment[["greater"]] %>% as.data.frame() %>% rownames_to_column("pathway") %>% mutate(enrichment = "Enriched"),
                              enrichment[["less"]] %>% as.data.frame() %>% rownames_to_column("pathway") %>%  mutate(enrichment = "Depleted")) %>% 
@@ -285,15 +284,75 @@ enriched_df = bind_rows(enrichment[["greater"]] %>% as.data.frame() %>% rownames
 
 enriched_df %>% 
   group_by(pathway) %>% 
-  slice_min(order_by = p.val, n = 1) %>% 
-  mutate(sig = p.val < 0.05) %>% 
+  slice_min(order_by = q.val, n = 1) %>% 
+  mutate(sig = q.val < 0.05) %>% 
   ggplot(aes(stat.mean,reorder(pathway,stat.mean),fill = sig)) +
   geom_bar(stat = "identity") +
   theme_bw()
 
 ```
+### GO enrichement
 
+```{r}
+library(topGO)
+library(GO.db)
 
+# Run separately for the different GO ontologies
+current_ontology <- "BP"
+
+# Get GO term definitions
+go <- keys(GO.db, keytype="GOID")
+go_annotations <- AnnotationDbi::select(GO.db, columns=c("GOID","TERM","DEFINITION","ONTOLOGY"), keys=go, keytype="GOID")
+
+# Data frame of GO terms annotated in our data
+subset_go_xrefs <- GO_xrefs %>% 
+  left_join(go_annotations) %>% 
+  filter(ONTOLOGY == current_ontology)
+
+gene_scores <- ifelse(deseq_res_df$log2FoldChange < -1, 
+                      deseq_res_df$padj, 
+                      1)
+names(gene_scores) <- deseq_res_df$locus_tag
+get_diff_genes <- function(scores_vec) {
+  return(scores_vec < 0.05)
+}
+
+# Locus tag to GOID mapping
+gene2GO <- split(subset_go_xrefs$GOID, subset_go_xrefs$locus_tag)
+
+# Create topGOdata object
+GOdata <- new("topGOdata",
+              description = "Microcystis metatranscriptome",
+              ontology = current_ontology,  
+              allGenes = gene_scores,  # CONTINUOUS scores instead of binary
+              geneSel = get_diff_genes,  # Function to identify significant genes
+              nodeSize = 2,
+              annot = annFUN.gene2GO,
+              gene2GO = gene2GO)
+
+# Run enrichment tests
+resultFisher <- runTest(GOdata, algorithm = "classic", statistic = "fisher")
+resultWeight01Fisher <- runTest(GOdata, algorithm = "weight01", statistic = "fisher")
+resultKS <- runTest(GOdata, algorithm = "classic", statistic = "ks")
+resultWeight01KS <- runTest(GOdata, algorithm = "weight01", statistic = "ks")
+
+# Make table with all results
+results_table <- GenTable(GOdata,
+                          classicFisher = resultFisher,
+                          weight01Fisher = resultWeight01Fisher,
+                          classicKS = resultKS,
+                          weight01KS = resultWeight01KS,
+                          orderBy = "weight01Fisher",
+                          ranksOf = "weight01Fisher"
+                          ) %>% 
+  as_tibble() %>% 
+  type_convert()
+
+showSigOfNodes(GOdata, 
+               score(resultWeight01Fisher), 
+               firstSigNodes = 15,
+               useInfo = 'all')
+```
 
 
 
