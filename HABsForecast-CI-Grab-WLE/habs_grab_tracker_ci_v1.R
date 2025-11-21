@@ -2,8 +2,8 @@
 'Extract Cyanobacteria Index (CI) Values Predicted by HABTracker
 
 Usage:
-  habs-grab-ci.R -l LATITUDE -L LONGITUDE -d DATE [options]
-  habs-grab-ci.R --csv CSV [options]
+  habs_grab_tracker_ci_v1.R -l LATITUDE -L LONGITUDE -d DATE [options]
+  habs_grab_tracker_ci_v1.R --csv CSV [options]
 
 Options:
 -l, --lat=LATITUDE       Latitude in decimal degrees.
@@ -40,6 +40,7 @@ arguments <- docopt(doc)
 #print(arguments)
 
 ## for testing interactively
+#arguments <- docopt(doc, args = c(" -l 41.8077 -L -83.3435 -d 2021-08-19 -t 14:00 -r 1000"))
 #arguments <- docopt(doc, args = c(" -l 41.8077 -L -83.3435 -d 2021-08-19 -t 14:00 -r 1000 -o /geomicro/data2/pdenuyl2/CIGLR_bioinformatics/2024/MODIS_acquisition/worker/test.csv"))
 #arguments <- docopt(doc, args = c(" -l 41.8077 -L -83.3435 -d 2021-08-19 -t 14:00 -r 1000 -csv /geomicro/data2/pdenuyl2/CIGLR_bioinformatics/2025/MODIS_acquisition/test.csv"))
 #arguments <- docopt(doc, args = c("--csv /geomicro/data2/pdenuyl2/CIGLR_bioinformatics/2025/MODIS_acquisition/test_og.csv"))

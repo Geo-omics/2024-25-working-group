@@ -57,7 +57,6 @@ lon <- collection_lon
 ### Script starts here ####
 ###########################
 
-#clean up time (if NA, adjust) - 12:00, rad = NA
 collection_lat <- as.numeric(lat)   #latitude
 collection_lon <- as.numeric(lon)   #longitude
 
@@ -158,6 +157,6 @@ output <- output %>%
                    fivekm_less50cloudCover = if_else(SampleID == sample_id, dfci_final_report_summary$fivekm_less50cloudCover, fivekm_less50cloudCover))
 }
 
-write_csv(output, file = "input_template_example3G.csv") 
+write_csv(output, file = "output_template_example3G.csv") 
 
 ```
