@@ -1,0 +1,73 @@
+#!/bin/bash
+#SBATCH -D /mnt/projects/hpc/hab/hab_tracker_2017/hab_tracker/
+#SBATCH --partition=ops
+#SBATCH -N 1
+#SBATCH --error=job-1.err
+#SBATCH --output=job-1.out
+cd /mnt/projects/hpc/hab/hab_tracker_2017/hab_tracker/dir1d1/
+/cm/shared/apps/slurm/current/bin/srun -n 1 -N 1 /mnt/projects/hpc/hab/hab_tracker_2017/ptraj_source/ptraj erie1d  > ptraj1d.out &
+cd /mnt/projects/hpc/hab/hab_tracker_2017/hab_tracker/dir1d2/
+/cm/shared/apps/slurm/current/bin/srun -n 1 -N 1 /mnt/projects/hpc/hab/hab_tracker_2017/ptraj_source/ptraj erie1d  > ptraj1d.out &
+cd /mnt/projects/hpc/hab/hab_tracker_2017/hab_tracker/dir1d3/
+/cm/shared/apps/slurm/current/bin/srun -n 1 -N 1 /mnt/projects/hpc/hab/hab_tracker_2017/ptraj_source/ptraj erie1d  > ptraj1d.out &
+cd /mnt/projects/hpc/hab/hab_tracker_2017/hab_tracker/dir1d4/
+/cm/shared/apps/slurm/current/bin/srun -n 1 -N 1 /mnt/projects/hpc/hab/hab_tracker_2017/ptraj_source/ptraj erie1d  > ptraj1d.out &
+cd /mnt/projects/hpc/hab/hab_tracker_2017/hab_tracker/dir1d5/
+/cm/shared/apps/slurm/current/bin/srun -n 1 -N 1 /mnt/projects/hpc/hab/hab_tracker_2017/ptraj_source/ptraj erie1d  > ptraj1d.out &
+cd /mnt/projects/hpc/hab/hab_tracker_2017/hab_tracker/dir1d6/
+/cm/shared/apps/slurm/current/bin/srun -n 1 -N 1 /mnt/projects/hpc/hab/hab_tracker_2017/ptraj_source/ptraj erie1d  > ptraj1d.out &
+cd /mnt/projects/hpc/hab/hab_tracker_2017/hab_tracker/dir1d7/
+/cm/shared/apps/slurm/current/bin/srun -n 1 -N 1 /mnt/projects/hpc/hab/hab_tracker_2017/ptraj_source/ptraj erie1d  > ptraj1d.out &
+cd /mnt/projects/hpc/hab/hab_tracker_2017/hab_tracker/dir1d8/
+/cm/shared/apps/slurm/current/bin/srun -n 1 -N 1 /mnt/projects/hpc/hab/hab_tracker_2017/ptraj_source/ptraj erie1d  > ptraj1d.out &
+cd /mnt/projects/hpc/hab/hab_tracker_2017/hab_tracker/dir1d9/
+/cm/shared/apps/slurm/current/bin/srun -n 1 -N 1 /mnt/projects/hpc/hab/hab_tracker_2017/ptraj_source/ptraj erie1d  > ptraj1d.out &
+cd /mnt/projects/hpc/hab/hab_tracker_2017/hab_tracker/dir1d10/
+/cm/shared/apps/slurm/current/bin/srun -n 1 -N 1 /mnt/projects/hpc/hab/hab_tracker_2017/ptraj_source/ptraj erie1d  > ptraj1d.out &
+cd /mnt/projects/hpc/hab/hab_tracker_2017/hab_tracker/dir1d11/
+/cm/shared/apps/slurm/current/bin/srun -n 1 -N 1 /mnt/projects/hpc/hab/hab_tracker_2017/ptraj_source/ptraj erie1d  > ptraj1d.out &
+cd /mnt/projects/hpc/hab/hab_tracker_2017/hab_tracker/dir1d12/
+/cm/shared/apps/slurm/current/bin/srun -n 1 -N 1 /mnt/projects/hpc/hab/hab_tracker_2017/ptraj_source/ptraj erie1d  > ptraj1d.out &
+cd /mnt/projects/hpc/hab/hab_tracker_2017/hab_tracker/dir1d13/
+/cm/shared/apps/slurm/current/bin/srun -n 1 -N 1 /mnt/projects/hpc/hab/hab_tracker_2017/ptraj_source/ptraj erie1d  > ptraj1d.out &
+cd /mnt/projects/hpc/hab/hab_tracker_2017/hab_tracker/dir1d14/
+/cm/shared/apps/slurm/current/bin/srun -n 1 -N 1 /mnt/projects/hpc/hab/hab_tracker_2017/ptraj_source/ptraj erie1d  > ptraj1d.out &
+cd /mnt/projects/hpc/hab/hab_tracker_2017/hab_tracker/dir1d15/
+/cm/shared/apps/slurm/current/bin/srun -n 1 -N 1 /mnt/projects/hpc/hab/hab_tracker_2017/ptraj_source/ptraj erie1d  > ptraj1d.out &
+cd /mnt/projects/hpc/hab/hab_tracker_2017/hab_tracker/dir1d16/
+/cm/shared/apps/slurm/current/bin/srun -n 1 -N 1 /mnt/projects/hpc/hab/hab_tracker_2017/ptraj_source/ptraj erie1d  > ptraj1d.out &
+cd /mnt/projects/hpc/hab/hab_tracker_2017/hab_tracker/dir1d17/
+/cm/shared/apps/slurm/current/bin/srun -n 1 -N 1 /mnt/projects/hpc/hab/hab_tracker_2017/ptraj_source/ptraj erie1d  > ptraj1d.out &
+cd /mnt/projects/hpc/hab/hab_tracker_2017/hab_tracker/dir1d18/
+/cm/shared/apps/slurm/current/bin/srun -n 1 -N 1 /mnt/projects/hpc/hab/hab_tracker_2017/ptraj_source/ptraj erie1d  > ptraj1d.out &
+cd /mnt/projects/hpc/hab/hab_tracker_2017/hab_tracker/dir1d19/
+/cm/shared/apps/slurm/current/bin/srun -n 1 -N 1 /mnt/projects/hpc/hab/hab_tracker_2017/ptraj_source/ptraj erie1d  > ptraj1d.out &
+cd /mnt/projects/hpc/hab/hab_tracker_2017/hab_tracker/dir1d20/
+/cm/shared/apps/slurm/current/bin/srun -n 1 -N 1 /mnt/projects/hpc/hab/hab_tracker_2017/ptraj_source/ptraj erie1d  > ptraj1d.out &
+cd /mnt/projects/hpc/hab/hab_tracker_2017/hab_tracker/dir1d21/
+/cm/shared/apps/slurm/current/bin/srun -n 1 -N 1 /mnt/projects/hpc/hab/hab_tracker_2017/ptraj_source/ptraj erie1d  > ptraj1d.out &
+cd /mnt/projects/hpc/hab/hab_tracker_2017/hab_tracker/dir1d22/
+/cm/shared/apps/slurm/current/bin/srun -n 1 -N 1 /mnt/projects/hpc/hab/hab_tracker_2017/ptraj_source/ptraj erie1d  > ptraj1d.out &
+cd /mnt/projects/hpc/hab/hab_tracker_2017/hab_tracker/dir1d23/
+/cm/shared/apps/slurm/current/bin/srun -n 1 -N 1 /mnt/projects/hpc/hab/hab_tracker_2017/ptraj_source/ptraj erie1d  > ptraj1d.out &
+cd /mnt/projects/hpc/hab/hab_tracker_2017/hab_tracker/dir1d24/
+/cm/shared/apps/slurm/current/bin/srun -n 1 -N 1 /mnt/projects/hpc/hab/hab_tracker_2017/ptraj_source/ptraj erie1d  > ptraj1d.out &
+cd /mnt/projects/hpc/hab/hab_tracker_2017/hab_tracker/dir1d25/
+/cm/shared/apps/slurm/current/bin/srun -n 1 -N 1 /mnt/projects/hpc/hab/hab_tracker_2017/ptraj_source/ptraj erie1d  > ptraj1d.out &
+cd /mnt/projects/hpc/hab/hab_tracker_2017/hab_tracker/dir1d26/
+/cm/shared/apps/slurm/current/bin/srun -n 1 -N 1 /mnt/projects/hpc/hab/hab_tracker_2017/ptraj_source/ptraj erie1d  > ptraj1d.out &
+cd /mnt/projects/hpc/hab/hab_tracker_2017/hab_tracker/dir1d27/
+/cm/shared/apps/slurm/current/bin/srun -n 1 -N 1 /mnt/projects/hpc/hab/hab_tracker_2017/ptraj_source/ptraj erie1d  > ptraj1d.out &
+cd /mnt/projects/hpc/hab/hab_tracker_2017/hab_tracker/dir1d28/
+/cm/shared/apps/slurm/current/bin/srun -n 1 -N 1 /mnt/projects/hpc/hab/hab_tracker_2017/ptraj_source/ptraj erie1d  > ptraj1d.out &
+cd /mnt/projects/hpc/hab/hab_tracker_2017/hab_tracker/dir1d29/
+/cm/shared/apps/slurm/current/bin/srun -n 1 -N 1 /mnt/projects/hpc/hab/hab_tracker_2017/ptraj_source/ptraj erie1d  > ptraj1d.out &
+cd /mnt/projects/hpc/hab/hab_tracker_2017/hab_tracker/dir1d30/
+/cm/shared/apps/slurm/current/bin/srun -n 1 -N 1 /mnt/projects/hpc/hab/hab_tracker_2017/ptraj_source/ptraj erie1d  > ptraj1d.out &
+cd /mnt/projects/hpc/hab/hab_tracker_2017/hab_tracker/dir1d31/
+/cm/shared/apps/slurm/current/bin/srun -n 1 -N 1 /mnt/projects/hpc/hab/hab_tracker_2017/ptraj_source/ptraj erie1d  > ptraj1d.out &
+cd /mnt/projects/hpc/hab/hab_tracker_2017/hab_tracker/dir1d32/
+/cm/shared/apps/slurm/current/bin/srun -n 1 -N 1 /mnt/projects/hpc/hab/hab_tracker_2017/ptraj_source/ptraj erie1d  > ptraj1d.out &
+cd /mnt/projects/hpc/hab/hab_tracker_2017/hab_tracker/dir1d33/
+/cm/shared/apps/slurm/current/bin/srun -n 1 -N 1 /mnt/projects/hpc/hab/hab_tracker_2017/ptraj_source/ptraj erie1d  > ptraj1d.out &
+wait

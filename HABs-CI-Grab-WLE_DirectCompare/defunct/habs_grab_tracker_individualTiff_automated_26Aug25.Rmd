@@ -1,0 +1,154 @@
+---
+title: "R Notebook"
+output: html_notebook
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r}
+
+#!/usr/bin/env Rscript
+#Extract Cyanobacteria Index (CI) Values From Individually Processed CI Images
+#satellite image resource: https://www.ncei.noaa.gov/access/metadata/landing-page/bin/iso?id=gov.noaa.nodc:NOS-HABOFS-LakeErie
+###########################
+### Dependencies ####
+###########################
+#renv::activate()
+library(docopt)
+library(PBSmapping) 
+library(geosphere)
+library(data.table)
+library(dplyr)
+library(stringr)
+library(lubridate)
+library(raster)
+library(ncdf4) #new
+library(fields) #new
+library(sf)
+library(png)
+library(readr)
+source("code/hab_tracker_2017_code_share/hab_tracker/habtracker_functions.R")
+
+```
+
+```{r}
+######################################
+#SAMPLE STREAM FOR BULK SAMPLES! 
+######################################
+
+input_df <- read_csv(file = "All3G_CI_individual_tiff_analysis_dayOFcollection.csv")
+input <- input_df %>%
+                      filter(!is.na(location))
+output <- input #make table for adding output results
+
+for (i in seq_len(nrow(input_df_filt))) {
+#clean up time (if NA, adjust) - 12:00, rad = NA
+sample_id <- input$SampleID[i]
+sample_name <- input$sample_name[i]
+collection_lat <- as.numeric(input$lat[i])   #latitude
+collection_lon <- as.numeric(input$lon[i]) #longitude
+file_path <- input$location[i]
+modis_ci_image_day_before <- input$modis_ci_image_name[i]
+
+tiff_path <- paste0(file_path, modis_ci_image_day_before)
+lat <- collection_lat		
+lon <- collection_lon
+
+###########################
+### Script starts here ####
+###########################
+
+#Let's implement a for[] loop - for a table with lat, lon, sample names, and paired tiff image.  
+#table <- 
+
+#clean up time (if NA, adjust) - 12:00, rad = NA
+collection_lat <- as.numeric(lat)   #latitude
+collection_lon <- as.numeric(lon)   #longitude
+
+#Next section of script can be divided into two parts:
+#
+#part 1: 
+#Mark Rowe 7-2-2015
+#this R script will read a geotiff CI file from Stumpf/Wynne
+#and write a CI and chlorophyll *.txt file
+#
+#part 2:
+#take the output from part 1 and compare coordinates from samples of interest
+#the output will provide distance between points of ci/chlorophyll readings and sample
+
+########
+#Part 1# Process Image to Gather All CI assignments
+########
+
+#open the geotiff
+r1 <- raster(tiff_path)
+
+# Extract the CRS from 'r1'
+crs <- crs(r1)
+# Convert the CRS to PROJ string format
+prj1 <- wkt(crs)
+
+##THIS IS WHERE THRE"S A PROBLEM
+dfrc_raw <- as.data.frame(r1, xy=TRUE)
+names(dfrc_raw) <- c("X","Y","ci")
+dfrc_process <- projLatLon(dfrc_raw/1000, prj1)
+dfrc_process$ci <- dfrc_process$ci*1000
+dfrc_process2 <- dfrc_process[, -c(1:2)] #delete columns 1 through 2 (X and Y)
+
+dfrc <- dfrc_process2[dfrc_process2$ci <= 250,] # remove land and cloud pixels
+
+dfrc$chl <- 0
+dfrc$chl[dfrc$ci == 0] <- 0
+xx <- which(dfrc$ci %in% 1:250)
+CI <- 10^( dfrc$ci[xx]/100 -4)
+dfrc$chl[xx] <- 12570*CI + 10
+
+########
+#Part 2# Isolate CI assignments of interest
+########
+
+setDT(dfrc)
+
+all_coord <- matrix(c(dfrc$lon, dfrc$lat), ncol = 2)
+
+dfci_results <- distHaversine(all_coord, c(collection_lon,collection_lat))
+
+dfci_results_df <- setNames(data.frame(dfci_results), "dist_m")
+dfci_final <- cbind(dfrc, dfci_results_df)
+
+nearest <- dfci_final %>% 
+              dplyr::arrange(dist_m) %>%
+              mutate(nearest_ci = first(ci)) %>%
+  summarise(nearest_ci = mean(nearest_ci, na.rm = TRUE)) 
+
+Onekm_rad <- dfci_final %>%
+              dplyr::arrange(dist_m) %>%
+              mutate(less_than_1km = if_else(dist_m <= 1000, TRUE, FALSE)) %>%
+  filter(less_than_1km == TRUE) %>%
+  summarise(avg_1km_rad_ci = mean(ci, na.rm = TRUE)) 
+  
+Fivekm_rad <- dfci_final %>%
+  dplyr::arrange(dist_m) %>%
+  mutate(less_than_5km = if_else(dist_m <= 5000, TRUE, FALSE)) %>%
+  filter(less_than_5km == TRUE) %>%
+  summarise(avg_5km_rad_ci = mean(ci, na.rm = TRUE)) 
+
+dfci_final_report <- dfci_final %>%
+                        dplyr::arrange(dist_m) %>%
+                        mutate(nearest_ci = as.numeric(nearest),
+                               onekm_rad_ci = as.numeric(Onekm_rad),
+                               fivekm_rad_ci = as.numeric(Fivekm_rad))
+
+dfci_final_report_summary <- dfci_final_report %>%
+                                  slice(1) %>%
+                                  dplyr::select(nearest_ci, dist_m, onekm_rad_ci, fivekm_rad_ci)
+                                 
+output <- output %>%
+            mutate(nearest_ci = if_else(SampleID == sample_id, dfci_final_report_summary$nearest_ci, nearest_ci),
+                   dist_m = if_else(SampleID == sample_id, dfci_final_report_summary$dist_m, dist_m),
+                   onekm_rad_ci = if_else(SampleID == sample_id, dfci_final_report_summary$onekm_rad_ci, onekm_rad_ci),
+                   fivekm_rad_ci = if_else(SampleID == sample_id, dfci_final_report_summary$fivekm_rad_ci, fivekm_rad_ci))
+}
+write_csv(output, file = "../Output_All3G_CI_individual_tiff_analysis_dayOFcollection.csv")
+```
+
