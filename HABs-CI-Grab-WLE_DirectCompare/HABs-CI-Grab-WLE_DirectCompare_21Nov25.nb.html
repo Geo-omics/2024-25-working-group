@@ -1754,14 +1754,89 @@ display: none;
 <!-- rnb-text-begin -->
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
-<!-- rnb-output-begin eyJkYXRhIjoiXG48IS0tIHJuYi1zb3VyY2UtYmVnaW4gZXlKa1lYUmhJam9pWUdCZ2NseHVjMjkxY21ObEtGd2lZMjlrWlM5b1lXSmZkSEpoWTJ0bGNsOHlNREUzWDJOdlpHVmZjMmhoY21VdmFHRmlYM1J5WVdOclpYSXZhR0ZpZEhKaFkydGxjbDltZFc1amRHbHZibk11VWx3aUtWeHVYRzVnWUdBaWZRPT0gLS0+XG5cbmBgYHJcbnNvdXJjZShcImNvZGUvaGFiX3RyYWNrZXJfMjAxN19jb2RlX3NoYXJlL2hhYl90cmFja2VyL2hhYnRyYWNrZXJfZnVuY3Rpb25zLlJcIilcblxuYGBgXG5cbjwhLS0gcm5iLXNvdXJjZS1lbmQgLS0+XG4ifQ== -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuc291cmNlKFwiY29kZS9oYWJfdHJhY2tlcl8yMDE3X2NvZGVfc2hhcmUvaGFiX3RyYWNrZXIvaGFidHJhY2tlcl9mdW5jdGlvbnMuUlwiKVxuXG5gYGAifQ== -->
-<pre class="r"><code>source(&quot;code/hab_tracker_2017_code_share/hab_tracker/habtracker_functions.R&quot;)
+<!-- rnb-output-begin eyJkYXRhIjoiXG48IS0tIHJuYi1zb3VyY2UtYmVnaW4gZXlKa1lYUmhJam9pWUdCZ2NseHVJeUV2ZFhOeUwySnBiaTlsYm5ZZ1VuTmpjbWx3ZEZ4dUkwVjRkSEpoWTNRZ1EzbGhibTlpWVdOMFpYSnBZU0JKYm1SbGVDQW9RMGtwSUZaaGJIVmxjeUJHY205dElFbHVaR2wyYVdSMVlXeHNlU0JRY205alpYTnpaV1FnUTBrZ1NXMWhaMlZ6WEc0amMyRjBaV3hzYVhSbElHbHRZV2RsSUhKbGMyOTFjbU5sT2lCb2RIUndjem92TDNkM2R5NXVZMlZwTG01dllXRXVaMjkyTDJGalkyVnpjeTl0WlhSaFpHRjBZUzlzWVc1a2FXNW5MWEJoWjJVdlltbHVMMmx6Yno5cFpEMW5iM1l1Ym05aFlTNXViMlJqT2s1UFV5MUlRVUpQUmxNdFRHRnJaVVZ5YVdWY2JpTWpJeU1qSXlNakl5TWpJeU1qSXlNakl5TWpJeU1qSXlNakkxeHVJeU1qSUVSbGNHVnVaR1Z1WTJsbGN5QWpJeU1qWEc0akl5TWpJeU1qSXlNakl5TWpJeU1qSXlNakl5TWpJeU1qSXlOY2JuSmxiblk2T25OdVlYQnphRzkwS0NsY2JseHVZR0JnSW4wPSAtLT5cblxuYGBgclxuIyEvdXNyL2Jpbi9lbnYgUnNjcmlwdFxuI0V4dHJhY3QgQ3lhbm9iYWN0ZXJpYSBJbmRleCAoQ0kpIFZhbHVlcyBGcm9tIEluZGl2aWR1YWxseSBQcm9jZXNzZWQgQ0kgSW1hZ2VzXG4jc2F0ZWxsaXRlIGltYWdlIHJlc291cmNlOiBodHRwczovL3d3dy5uY2VpLm5vYWEuZ292L2FjY2Vzcy9tZXRhZGF0YS9sYW5kaW5nLXBhZ2UvYmluL2lzbz9pZD1nb3Yubm9hYS5ub2RjOk5PUy1IQUJPRlMtTGFrZUVyaWVcbiMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjI1xuIyMjIERlcGVuZGVuY2llcyAjIyMjXG4jIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyNcbnJlbnY6OnNuYXBzaG90KClcblxuYGBgXG5cbjwhLS0gcm5iLXNvdXJjZS1lbmQgLS0+XG4ifQ== -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuIyEvdXNyL2Jpbi9lbnYgUnNjcmlwdFxuI0V4dHJhY3QgQ3lhbm9iYWN0ZXJpYSBJbmRleCAoQ0kpIFZhbHVlcyBGcm9tIEluZGl2aWR1YWxseSBQcm9jZXNzZWQgQ0kgSW1hZ2VzXG4jc2F0ZWxsaXRlIGltYWdlIHJlc291cmNlOiBodHRwczovL3d3dy5uY2VpLm5vYWEuZ292L2FjY2Vzcy9tZXRhZGF0YS9sYW5kaW5nLXBhZ2UvYmluL2lzbz9pZD1nb3Yubm9hYS5ub2RjOk5PUy1IQUJPRlMtTGFrZUVyaWVcbiMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjI1xuIyMjIERlcGVuZGVuY2llcyAjIyMjXG4jIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyNcbnJlbnY6OnNuYXBzaG90KClcblxuYGBgIn0= -->
+<pre class="r"><code>#!/usr/bin/env Rscript
+#Extract Cyanobacteria Index (CI) Values From Individually Processed CI Images
+#satellite image resource: https://www.ncei.noaa.gov/access/metadata/landing-page/bin/iso?id=gov.noaa.nodc:NOS-HABOFS-LakeErie
+###########################
+### Dependencies ####
+###########################
+renv::snapshot()
 </code></pre>
 <!-- rnb-source-end -->
 <!-- rnb-output-end -->
-<!-- rnb-output-begin eyJkYXRhIjoiWzFdIFwiZW5kIGhhYnRyYWNrZXJfZnVuY3Rpb25zLlJcIlxuIn0= -->
-<pre><code>[1] &quot;end habtracker_functions.R&quot;</code></pre>
+<!-- rnb-output-begin eyJkYXRhIjoiQSBsYXJnZSBudW1iZXIgb2YgZmlsZXMgKDExOTUgaW4gdG90YWwpIGhhdmUgYmVlbiBkaXNjb3ZlcmVkLlxuSXQgbWF5IHRha2UgcmVudiBhIGxvbmcgdGltZSB0byBzY2FuIHRoZXNlIGZpbGVzIGZvciBkZXBlbmRlbmNpZXMuXG5Db25zaWRlciB1c2luZyAucmVudmlnbm9yZSB0byBpZ25vcmUgaXJyZWxldmFudCBmaWxlcy5cblNlZSBgXHUwMDFiXTg7O3gtci1oZWxwOnJlbnY6OmRlcGVuZGVuY2llc1x1MDAwNz9yZW52OjpkZXBlbmRlbmNpZXNcdTAwMWJdODs7XHUwMDA3YCBmb3IgbW9yZSBpbmZvcm1hdGlvbi5cblNldCBgb3B0aW9ucyhyZW52LmNvbmZpZy5kZXBlbmRlbmNpZXMubGltaXQgPSBJbmYpYCB0byBkaXNhYmxlIHRoaXMgd2FybmluZy5cblxuVGhlIGZvbGxvd2luZyByZXF1aXJlZCBwYWNrYWdlcyBhcmUgbm90IGluc3RhbGxlZDpcbi0gYWJpbmRcbi0gYWtpbWFcbi0gYW5pbWF0aW9uXG4tIGpwZWdcbi0gbmNkZlxuLSBwbG90cml4XG5QYWNrYWdlcyBtdXN0IGZpcnN0IGJlIGluc3RhbGxlZCBiZWZvcmUgcmVudiBjYW4gc25hcHNob3QgdGhlbS5cblVzZSBgXHUwMDFiXTg7O3gtci1ydW46cmVudjo6ZGVwZW5kZW5jaWVzKClcdTAwMDdyZW52OjpkZXBlbmRlbmNpZXMoKVx1MDAxYl04OztcdTAwMDdgIHRvIHNlZSB3aGVyZSB0aGlzIHBhY2thZ2UgaXMgdXNlZCBpbiB5b3VyIHByb2plY3QuXG5cbldoYXQgZG8geW91IHdhbnQgdG8gZG8/IFxuXG4xOiBTbmFwc2hvdCwganVzdCB1c2luZyB0aGUgY3VycmVudGx5IGluc3RhbGxlZCBwYWNrYWdlcy5cbjI6IEluc3RhbGwgdGhlIHBhY2thZ2VzLCB0aGVuIHNuYXBzaG90LlxuMzogQ2FuY2VsLCBhbmQgcmVzb2x2ZSB0aGUgc2l0dWF0aW9uIG9uIHlvdXIgb3duLlxuIn0= -->
+<pre><code>A large number of files (1195 in total) have been discovered.
+It may take renv a long time to scan these files for dependencies.
+Consider using .renvignore to ignore irrelevant files.
+See `]8;;x-r-help:renv::dependencies?renv::dependencies]8;;` for more information.
+Set `options(renv.config.dependencies.limit = Inf)` to disable this warning.
+
+The following required packages are not installed:
+- abind
+- akima
+- animation
+- jpeg
+- ncdf
+- plotrix
+Packages must first be installed before renv can snapshot them.
+Use `]8;;x-r-run:renv::dependencies()renv::dependencies()]8;;` to see where this package is used in your project.
+
+What do you want to do? 
+
+1: Snapshot, just using the currently installed packages.
+2: Install the packages, then snapshot.
+3: Cancel, and resolve the situation on your own.</code></pre>
+<!-- rnb-output-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiXG48IS0tIHJuYi1zb3VyY2UtYmVnaW4gZXlKa1lYUmhJam9pWUdCZ2NseHVNVnh1WUdCZ0luMD0gLS0+XG5cbmBgYHJcbjFcbmBgYFxuXG48IS0tIHJuYi1zb3VyY2UtZW5kIC0tPlxuIn0= -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuMVxuYGBgIn0= -->
+<pre class="r"><code>1</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-output-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiVGhlIGZvbGxvd2luZyBwYWNrYWdlKHMpIHdpbGwgYmUgdXBkYXRlZCBpbiB0aGUgbG9ja2ZpbGU6XG5cbiMgQ1JBTiAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLVxuLSBjbGFzcyAgICAgICAgIFs3LjMtMjAgLT4gNy4zLTIzXVxuLSBLZXJuU21vb3RoICAgIFsyLjIzLTIwIC0+IDIuMjMtMjZdXG4tIGxhdHRpY2UgICAgICAgWzAuMjAtNDUgLT4gMC4yMi03XVxuLSBNQVNTICAgICAgICAgIFs3LjMtNTUgLT4gNy4zLTY1XVxuLSBldmFsdWF0ZSAgICAgIFsqIC0+IDEuMC41XVxuLSB4ZnVuICAgICAgICAgIFsqIC0+IDAuNTNdXG5cbiMgUlNQTSAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLVxuLSBiYXNlNjRlbmMgICAgIFsqIC0+IDAuMS0zXVxuLSBic2xpYiAgICAgICAgIFsqIC0+IDAuOS4wXVxuLSBjYWNoZW0gICAgICAgIFsqIC0+IDEuMS4wXVxuLSBkaWdlc3QgICAgICAgIFsqIC0+IDAuNi4zN11cbi0gZmFzdG1hcCAgICAgICBbKiAtPiAxLjIuMF1cbi0gZm9udGF3ZXNvbWUgICBbKiAtPiAwLjUuM11cbi0gZnMgICAgICAgICAgICBbKiAtPiAxLjYuNl1cbi0gaGlnaHIgICAgICAgICBbKiAtPiAwLjExXVxuLSBodG1sdG9vbHMgICAgIFsqIC0+IDAuNS44LjFdXG4tIGpxdWVyeWxpYiAgICAgWyogLT4gMC4xLjRdXG4tIGpzb25saXRlICAgICAgWyogLT4gMi4wLjBdXG4tIGtuaXRyICAgICAgICAgWyogLT4gMS41MF1cbi0gbWVtb2lzZSAgICAgICBbKiAtPiAyLjAuMV1cbi0gbWltZSAgICAgICAgICBbKiAtPiAwLjEzXVxuLSByYXBwZGlycyAgICAgIFsqIC0+IDAuMy4zXVxuLSBybWFya2Rvd24gICAgIFsqIC0+IDIuMjldXG4tIHNhc3MgICAgICAgICAgWyogLT4gMC40LjEwXVxuLSB0aW55dGV4ICAgICAgIFsqIC0+IDAuNTddXG4tIHlhbWwgICAgICAgICAgWyogLT4gMi4zLjEwXVxuXG5UaGUgdmVyc2lvbiBvZiBSIHJlY29yZGVkIGluIHRoZSBsb2NrZmlsZSB3aWxsIGJlIHVwZGF0ZWQ6XG4tIFIgICAgICAgICAgICAgWzQuMS4yIC0+IDQuNS4xXVxuIn0= -->
+<pre><code>The following package(s) will be updated in the lockfile:
+
+# CRAN -----------------------------------------------------------------------
+- class         [7.3-20 -&gt; 7.3-23]
+- KernSmooth    [2.23-20 -&gt; 2.23-26]
+- lattice       [0.20-45 -&gt; 0.22-7]
+- MASS          [7.3-55 -&gt; 7.3-65]
+- evaluate      [* -&gt; 1.0.5]
+- xfun          [* -&gt; 0.53]
+
+# RSPM -----------------------------------------------------------------------
+- base64enc     [* -&gt; 0.1-3]
+- bslib         [* -&gt; 0.9.0]
+- cachem        [* -&gt; 1.1.0]
+- digest        [* -&gt; 0.6.37]
+- fastmap       [* -&gt; 1.2.0]
+- fontawesome   [* -&gt; 0.5.3]
+- fs            [* -&gt; 1.6.6]
+- highr         [* -&gt; 0.11]
+- htmltools     [* -&gt; 0.5.8.1]
+- jquerylib     [* -&gt; 0.1.4]
+- jsonlite      [* -&gt; 2.0.0]
+- knitr         [* -&gt; 1.50]
+- memoise       [* -&gt; 2.0.1]
+- mime          [* -&gt; 0.13]
+- rappdirs      [* -&gt; 0.3.3]
+- rmarkdown     [* -&gt; 2.29]
+- sass          [* -&gt; 0.4.10]
+- tinytex       [* -&gt; 0.57]
+- yaml          [* -&gt; 2.3.10]
+
+The version of R recorded in the lockfile will be updated:
+- R             [4.1.2 -&gt; 4.5.1]</code></pre>
+<!-- rnb-output-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiXG48IS0tIHJuYi1zb3VyY2UtYmVnaW4gZXlKa1lYUmhJam9pWUdCZ2NseHVXVnh1WUdCZ0luMD0gLS0+XG5cbmBgYHJcbllcbmBgYFxuXG48IS0tIHJuYi1zb3VyY2UtZW5kIC0tPlxuIn0= -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuWVxuYGBgIn0= -->
+<pre class="r"><code>Y</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-output-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiXG4tIExvY2tmaWxlIHdyaXR0ZW4gdG8gXCJ+LzIwMjQtMjUtd29ya2luZy1ncm91cC9IQUJzLUNJLUdyYWItV0xFX0RpcmVjdENvbXBhcmUvcmVudi5sb2NrXCIuXG4ifQ== -->
+<pre><code>
+- Lockfile written to &quot;~/2024-25-working-group/HABs-CI-Grab-WLE_DirectCompare/renv.lock&quot;.</code></pre>
 <!-- rnb-output-end -->
 <!-- rnb-chunk-end -->
 <!-- rnb-text-begin -->
