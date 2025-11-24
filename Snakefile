@@ -70,6 +70,9 @@ rule run_featurecounts:
 rule run_salmon:
     input: expand("data/salmon_quant/GCF_002095975/.{sample}.done", sample = metaT_samples) # GCF_002095975 is a specific genome, could replace with wildcard to map to multiple genomes
 
+rule run_kofamscan_genome:
+    input: expand("data/reference/genomes/GCF_002095975/GCF_002095975_kofam_results.txt")# GCF_002095975 is a specific genome, could replace with wildcard to map to multiple genomes
+
 # Make a graph of all our rules
 rule make_rulegraph:
     output:
@@ -765,6 +768,37 @@ rule salmon_quant:
     resources: cpus = 16, mem_mb = 4000, time_min = 180
     shell:
         """
-        salmon quant -i {params.index} --libType A -1 {input.fwd_reads} -2 {input.rev_reads} --validateMappings -o {params.output} -p {resources.cpus}
+        salmon quant \
+            -i {params.index} \
+            --libType A \
+            --gcBias \
+            --seqBias \
+            -p {resources.cpus} \
+            -1 {input.fwd_reads} \
+            -2 {input.rev_reads} \
+            --validateMappings \
+            -o {params.output}
         """
 
+rule kofam_scan_genome:
+    input:
+        proteins = "data/reference/genomes/{genome}/{genome}.faa",
+        profile = "/geomicro/data2/kiledal/GLAMR/data/reference/kegg/kofamscan/profiles",
+        ko_list = "/geomicro/data2/kiledal/GLAMR/data/reference/kegg/kofamscan/ko_list"
+    output:
+        ko_annot = "data/reference/genomes/{genome}/{genome}_kofam_results.txt"
+    conda: "config/conda/kofamscan.yaml"
+    #shadow: "shallow"
+    benchmark: "benchmarks/kofam_scan_genome/{genome}.txt"
+    log: "logs/kofam_scan_genome/{genome}.log"
+    resources: cpus=24, time_min = 20000, mem_mb = lambda wildcards, attempt: attempt * 100000
+    shell:
+        """
+        exec_annotation \
+            -o {output.ko_annot} \
+            --format=detail-tsv \
+            --cpu={resources.cpus}  \
+            --profile {input.profile} \
+            --tmp-dir=/tmp/{wildcards.genome}_kofamscan \
+            --ko-list {input.ko_list} {input.proteins} | tee {log}
+        """
