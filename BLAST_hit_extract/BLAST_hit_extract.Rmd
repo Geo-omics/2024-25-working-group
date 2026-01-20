@@ -31,6 +31,7 @@ glamr_samples_pg <- tbl(pg, "glamr_samples") %>%
 2.) BLASTN assemblies to identify contigs that possess gvpA or gvpC (source - doi: https://doi.org/10.1038/nrmicro2834) 
 3.) Analyze BLASTN output, identify sequences of interest
 4.) Identify "best" hit and filter (50% cover / 80% ID of genes of interest)
+5.) Extract sequence hit regions for analysis
 
 1.) Assembly (metagenomic) path setup
 ```{r}
@@ -222,7 +223,7 @@ write.csv(blastn_buoyancy_assemblies_unique_gene_QC, file ="blast/blastn_buoyanc
 
 ```
 
-4.) gvp - Extract sequence hit regions for analysis
+5.) Extract sequence hit regions for analysis
 ```{r}
 
 gvp_hits <- blastn_buoyancy_assemblies_unique_gene_QC %>%
