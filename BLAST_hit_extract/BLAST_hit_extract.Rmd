@@ -1,0 +1,295 @@
+---
+title: "BLAST_hit_extract_WorkingGroup_19Jan26"
+output: html_notebook
+editor_options: 
+  chunk_output_type: inline
+---
+
+Dependencies
+```{r setup, include=FALSE}
+#rm(list=ls());if(is.null(dev.list()["RStudioGD"])){} else {dev.off(dev.list()["RStudioGD"])};cat("\014")
+library(tidyverse)
+#library(furrr)
+#library(Rsamtools)
+library(vroom)
+library(Biostrings)
+#library(seqinr)
+library(dplyr)
+
+#Load postgres server running on Alpena
+pg <- DBI::dbConnect(RPostgres::Postgres(),dbname = "glamr_data", host = "cayman.earth.lsa.umich.edu", port = "5432", user = "glamr_admin", password = "glamr2023")
+
+#Load GLAMR sample data
+glamr_samples_pg <- tbl(pg, "glamr_samples") %>% 
+  collect() 
+ 
+``` 
+
+---Outline---
+1.) Setup of general GLAMR data and assemblies of interest for BLASTN, filter data set, symlink processed contigs
+  note: Previous work was done investigating gvpP genes in: /geomicro/data2/pdenuyl2/CIGLR_bioinformatics/2024/SagBay
+2.) BLASTN assemblies to identify contigs that possess gvpA or gvpC (source - doi: https://doi.org/10.1038/nrmicro2834) 
+3.) Analyze BLASTN output, identify sequences of interest
+4.) Identify "best" hit and filter (50% cover / 80% ID of genes of interest)
+
+1.) Assembly (metagenomic) path setup
+```{r}
+
+#Identify samples by set (i.e. project) of interest in GLAMR - western Lake Erie & Saginaw Bay, Lake Huron from set_41 ONLY
+GLAMR_sample_table <- glamr_samples_pg %>% 
+                              filter(StudyID %in% "set_41")           #include only StudyID of interest (NOAA-GLERL metagenomes)
+
+#Save data table used (Last used/saved: January 13, 2025)
+#write_csv(GLAMR_sample_table_set41, file = "GLAMR_metdata/GLAMR_sample_table_pg_SB_16Dec25.csv")
+GLAMR_sample_table <- read_csv(file = "GLAMR_metdata/GLAMR_sample_table_pg_SB_16Dec25.csv", show_col_types = FALSE)
+                               
+GLAMR_sample_table %>% distinct(SampleID) %>% dplyr::count() #218 metagenome samples from project in GLAMR - December 16, 2025
+
+#Gather all read paths to megahit assemblies to process through BLASTN, sym link to new path
+assembly_paths <- tibble(sample = GLAMR_sample_table$sample) %>%
+                  mutate(read_path = str_glue("/geomicro/data2/kiledal/GLAMR/data/omics/metagenomes/{sample}/assembly/megahit_noNORM/final.contigs.renamed.fa"),
+                       new_path = str_glue("/geomicro/data2/pdenuyl2/2024-25-working-group/BLAST_hit_extract/blast/query/{sample}_final.contigs.renamed.fa"))
+
+#Only select 5 samples for demo
+assembly_paths_slice5 <- assembly_paths %>%
+                              slice_head(n = 5)
+
+#symbolic link read_paths
+file.symlink(assembly_paths_slice5$read_path, assembly_paths_slice5$new_path) 
+
+```
+
+#All options in step 2a-c are slow.  Files already available in directory
+#NOTE: For analysis pipelines, BLASTN flag: -outfmt '6 std qcovs stitle' is essential
+2a.) BLASTN assemblies by command line 
+```{bash}
+
+makeblastdb -in blast/database/blastdbbuoyancygvpAC.fasta -dbtype nucl 
+#samp_2041
+blastn -db blast/database/blastdbbuoyancygvpAC.fasta \
+       -query blast/query/samp_2041_final.contigs.renamed.fa \
+       -out blast/output/samp_2041_vs_gvpAC_db_blastn_output.tsv \
+       -outfmt '6 std qcovs stitle qlen' \
+       -evalue 1e-2 
+#samp_2042
+blastn -db blast/database/blastdbbuoyancygvpAC.fasta \
+       -query blast/query/samp_2042_final.contigs.renamed.fa \
+       -out blast/output/samp_2042_vs_gvpAC_db_blastn_output.tsv \
+       -outfmt '6 std qcovs stitle qlen' \
+       -evalue 1e-2 
+#samp_2043
+blastn -db blast/database/blastdbbuoyancygvpAC.fasta \
+       -query blast/query/samp_2043_final.contigs.renamed.fa \
+       -out blast/output/samp_2043_vs_gvpAC_db_blastn_output.tsv \
+       -outfmt '6 std qcovs stitle qlen' \
+       -evalue 1e-2 
+#samp_2044
+blastn -db blast/database/blastdbbuoyancygvpAC.fasta \
+       -query blast/query/samp_2044_final.contigs.renamed.fa \
+       -out blast/output/samp_2044_vs_gvpAC_db_blastn_output.tsv \
+       -outfmt '6 std qcovs stitle qlen' \
+       -evalue 1e-2 
+#samp_2045
+blastn -db blast/database/blastdbbuoyancygvpAC.fasta \
+       -query blast/query/samp_2045_final.contigs.renamed.fa \
+       -out blast/output/samp_2045_vs_gvpAC_db_blastn_output.tsv \
+       -outfmt '6 std qcovs stitle qlen' \
+       -evalue 1e-2 
+
+```
+2b.) BLASTN assemblies using loops via command line using BASH
+```{bash}
+
+makeblastdb -in blast/database/blastdbbuoyancygvpAC.fasta -dbtype nucl 
+
+for samp in 2041 2042 2043 2044 2045
+do
+  echo "#samp_$samp"
+  blastn -db blast/database/blastdbbuoyancygvpAC.fasta \
+    -query blast/query/samp_${samp}_final.contigs.renamed.fa \
+    -out blast/output/samp_${samp}_vs_gvpAC_db_blastn_output.tsv \
+    -outfmt '6 std qcovs stitle qlen' \
+    -evalue 1e-2
+done
+
+```
+
+2c.) BLASTN assemblies using snakemake 
+```{bash}
+
+conda activate snakemake9 
+snakemake run_blastn_assemblies_gvpAC --profile config/snakemake_profiles/geomicro8/ 
+
+```
+
+3.) Analyze BLASTN output, identify sequences of interest
+```{r}
+
+#Make list of blastn result outputs
+blastn_assemblies_list <-  system("ls blast/output/*.tsv", intern=TRUE) 
+
+#Include only files with results in list
+blastn_assemblies_list_results <- blastn_assemblies_list[file.size(blastn_assemblies_list) > 0]
+
+#Bind rows of all contig blastn results
+blastn_assemblies_results_vroom <- vroom(blastn_assemblies_list_results, col_names = FALSE, show_col_types = FALSE, delim = "\t")
+
+#Add column names - corresponding to blast output flag -outfmt '6 std qcovs stitle'
+colnames(blastn_assemblies_results_vroom) <- c("qseqid", "sseqid", "pident", "length", "mismatch", "gapopen", "qstart", "qend", "sstart", "send", "evalue", "bitscore", "qcovs", "stitle", "qlen") #added qlen Sept 26, 2024 for Buoyancy analysis
+
+#Column name reference: https://www.metagenomics.wiki/tools/blast/blastn-output-format-6
+#1.  qseqid      query or source (e.g., gene) sequence id
+#2.  sseqid      subject  or target (e.g., reference genome) sequence id
+#3.  pident      percentage of identical matches
+#4.  length      alignment length (sequence overlap)
+#5.  mismatch    number of mismatches
+#6.  gapopen     number of gap openings
+#7.  qstart      start of alignment in query
+#8.  qend        end of alignment in query
+#9.  sstart      start of alignment in subject
+#10. send        end of alignment in subject
+#11. evalue      expect value
+#12. bitscore    bit score
+#13. qcovs       query coverage per subject
+#14. stitle      subject title
+#15. qlen        query length
+
+#Make column for general toxin target id, toxin gene target, and sample ids
+blastn_assemblies_results_vroom_add <- blastn_assemblies_results_vroom %>% mutate(target = substr(sseqid, 1, 3),
+                                                                                  gene_target = substr(sseqid, 1,4),
+                                                                                  SampleID = qseqid %>% str_extract("samp_.*_") %>% str_sub(end = -2))
+
+```
+
+4.) Identify "best" hit and filter (50% cover / 80% ID of genes of interest)
+```{r}
+
+# Sort by query positions and remove overlapping hits
+blastn_buoyancy_assemblies_id_overlap <- blastn_assemblies_results_vroom_add %>%
+  arrange(qseqid, qstart) %>%       # Sort by contig and query start position
+  group_by(qseqid, gene_target) %>%
+  mutate(overlap_group = cumsum(c(1, qstart[-1] > qend[-length(qend)]))) %>%
+  select(qseqid, overlap_group, sseqid, pident, length, gene_target, everything()) %>%
+  ungroup()
+# Creates overlap groups - explained:
+#1. qstart[-1] > qend[-length(qend)]
+#qstart[-1]: All the elements of qstart except the first.
+#qend[-length(qend)]: All the elements of qend except the last.
+#Comparing for row 2:qstart[2] > qend[1],for row 3:qstart[3] > qend[2],…for the last row:qstart[n] > qend[n-1].
+
+#This checks:  
+#If the start of the current hit is after the end of the previous hit.
+#In other words, does this hit not overlap the previous one?  
+#If TRUE: this hit starts a new group (no overlap).
+#If FALSE: still part of previous group (overlap).
+
+#2. c(1, ...)
+#Prepends a 1—meaning the very first row is always the start of a new group.
+
+#3. cumsum(...)
+#cumsum() takes the logical vector from above and sums it cumulatively down the rows.
+#Whenever there’s a non-overlap (TRUE), the group number increments
+
+#The result: a column that labels each contiguous block of overlapping hits with the same number; it jumps by one when you have a non-overlapping hit.
+
+#Take the *BEST* hit from each overlapping group - determined by e-value
+blastn_buoyancy_assemblies_best_hits <- blastn_buoyancy_assemblies_id_overlap %>%
+  group_by(qseqid, gene_target, overlap_group) %>%
+  slice_min(evalue, n = 1, with_ties = FALSE) %>% # Keep only the hit with the lowest evalue
+  select(qseqid, overlap_group, sseqid, pident, length, gene_target, everything()) %>%
+  ungroup()
+
+#Make table of gvp gene lengths (for filtering results)
+#First import gvp gene database
+blastdb_buoyancy_read <- readDNAStringSet(filepath = "blast/database/blastdbbuoyancygvpAC.fasta") 
+
+#Make a table with corresponding 50% length cutoff for each sequence
+names_width_table <- data.frame(
+  subject = names(blastdb_buoyancy_read),
+  ref_width = width(blastdb_buoyancy_read)
+) %>%
+  mutate(cutoff_width = (ref_width * .5) %>% round(.))
+
+#Filter blast hits for 80% percent identity
+blastn_buoyancy_assemblies_unique_gene_QC <- blastn_buoyancy_assemblies_best_hits %>%
+  inner_join(names_width_table, by = c("stitle" = "subject")) %>%
+  filter(length >= cutoff_width) %>%
+  filter(pident >= 80) %>%
+  select(qseqid, overlap_group, sseqid, pident, length, cutoff_width, gene_target, ref_width, everything())
+
+# Save results
+write.csv(blastn_buoyancy_assemblies_unique_gene_QC, file ="blast/blastn_buoyancy_assemblies_results_50cov80id.csv")
+
+```
+
+4.) gvp - Extract sequence hit regions for analysis
+```{r}
+
+gvp_hits <- blastn_buoyancy_assemblies_unique_gene_QC %>%
+              mutate(qseqid_overlap = paste0(qseqid, "_", overlap_group)) %>%
+              select(qseqid_overlap, everything())
+
+##########################
+#Extract sequence regions#
+##########################
+
+#for (seq in gvp_hits$qseqid_overlap) {
+#Test: 
+seq <- gvp_hits$qseqid_overlap[1]
+#GLAMR_sampleID, contig, overlap group
+
+SampleID <- gvp_hits %>%
+                  filter(seq == qseqid_overlap) %>%
+                  pull(SampleID) 
+
+query_name <- gvp_hits %>%
+                  filter(seq == qseqid_overlap) %>%
+                  pull(qseqid) 
+
+gene_target <- gvp_hits %>%
+                  filter(seq == qseqid_overlap) %>%
+                  pull(gene_target) 
+
+input_fasta <- paste0("blast/query/", SampleID, "_final.contigs.renamed.fa")
+
+# Read the FASTA file using Biostrings
+fasta_data <- readDNAStringSet(input_fasta, format = "fasta")
+
+# Convert to tibble for easier manipulation
+fasta_df <- tibble(
+  name = names(fasta_data),
+  sequence = as.character(fasta_data))
+
+# Make list of contig names and regions to filter
+qstart <- gvp_hits %>%
+                filter(seq == qseqid_overlap) %>%
+                pull(qstart) %>%
+                as.numeric()
+
+qend <- gvp_hits %>%
+                  filter(seq == qseqid_overlap) %>%
+                  pull(qend) %>%
+                  as.numeric()
+  
+output_fasta <- paste0("blast/extract_seqs/gvp/", query_name, "_", gene_target, "_qstart_", qstart, "_qend", qend, "_extract.fa")
+
+# Extract the sequence for the contig of interest from the tibble
+contig_sequence <- fasta_df %>%
+  filter(name == query_name) %>%
+  pull(sequence) %>%
+  DNAString()  # Convert to a DNAString object
+
+# Extract the region from qstart to qend
+extracted_region <- subseq(contig_sequence, start = qstart, end = qend)
+
+# Convert the all contigs back to a DNAStringSet
+region_to_write <- DNAStringSet(extracted_region)
+names(region_to_write) <- paste0(query_name, "_", gene_target, "_qstart_", qstart, "_qend", qend, "_extract")
+
+# Write the contig to the new FASTA file
+writeXStringSet(region_to_write, output_fasta)
+
+#}
+
+```
+

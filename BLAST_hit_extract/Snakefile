@@ -1,0 +1,39 @@
+import os
+import re
+import snakemake.io
+from glob import glob
+
+rule make_blast_db:
+    input: 
+        "blast/database/nucl/{blast_name}.fasta"
+    output: 
+        "blast/database/nucl/{blast_name}.fasta.nin"
+    log: 
+        "blast/logs/database/{blast_name}.txt"
+    conda: "config/blast.yml"
+    resources: 
+        cpus=1, mem_mb=5000, time_min=10000
+    shell: 
+        """
+        makeblastdb -in {input} -dbtype nucl -logfile {log}
+        """
+
+rule blastn_assemblies_UNIVERSAL:
+    input: 
+        blast_db = "blast/database/{blast_name}.fasta",
+        blast_db_index = "blast/database/{blast_name}.fasta.nin",
+        assembly = "blast/query/{sample}_final.contigs.renamed.fa"
+    output:
+         "blast/output/{sample}_vs_{blast_name}_blastn_output.tsv"
+    conda: 
+        "config/blast.yml"
+    resources:
+        cpus=16, mem_mb=16000, time_min=10000
+    shell:
+        """
+        blastn -db {input.blast_db} -query {input.assembly} -out {output} -outfmt '6 std qcovs stitle qlen' -num_threads {resources.cpus} -evalue 1e-2
+        """
+
+rule run_blastn_assemblies_gvpAC:
+    input: 
+        expand("blast/output/{sample}_vs_{blast_name}_blastn_output.tsv", sample = glob_wildcards("blast/query/{sample}_final.contigs.renamed.fa",followlinks=True).sample, blast_name = ["blastdbbuoyancygvpAC"])

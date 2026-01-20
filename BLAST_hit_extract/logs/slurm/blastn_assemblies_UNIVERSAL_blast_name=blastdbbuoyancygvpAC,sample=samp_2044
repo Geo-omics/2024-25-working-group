@@ -1,0 +1,20 @@
+host: cayman
+Building DAG of jobs...
+Using shell: /usr/bin/bash
+Provided cores: 4
+Rules claiming more threads will be scaled down.
+Provided resources: mem_mb=16000, mem_mib=15259, disk_mb=100, disk_mib=96, cpus=4, time_min=10000, heavy_network=0, gpu=0
+Select jobs to execute...
+Execute 1 jobs...
+
+[Fri Jan 16 10:53:29 2026]
+localrule blastn_assemblies_UNIVERSAL:
+    input: blast/database/blastdbbuoyancygvpAC.fasta, blast/database/blastdbbuoyancygvpAC.fasta.nin, blast/query/samp_2044_final.contigs.renamed.fa
+    output: blast/output/samp_2044_vs_blastdbbuoyancygvpAC_blastn_output.tsv
+    jobid: 0
+    reason: Forced execution
+    wildcards: sample=samp_2044, blast_name=blastdbbuoyancygvpAC
+    resources: mem_mb=16000, mem_mib=15259, disk_mb=100, disk_mib=96, tmpdir=/tmp, cpus=4, time_min=10000, heavy_network=0, gpu=0
+
+Activating conda environment: .snakemake/conda/a2e3f9729277a831ecc3afdda855b72b_
+slurmstepd-cayman: error: *** JOB 62430 ON cayman CANCELLED AT 2026-01-16T10:53:39 ***
