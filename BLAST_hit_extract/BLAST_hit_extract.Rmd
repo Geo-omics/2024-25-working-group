@@ -196,6 +196,7 @@ blastn_buoyancy_assemblies_id_overlap <- blastn_assemblies_results_vroom_add %>%
 #Take the *BEST* hit from each overlapping group - determined by e-value
 blastn_buoyancy_assemblies_best_hits <- blastn_buoyancy_assemblies_id_overlap %>%
   group_by(qseqid, gene_target, overlap_group) %>%
+  arrange(evalue, -bitscore) %>% 
   slice_min(evalue, n = 1, with_ties = FALSE) %>% # Keep only the hit with the lowest evalue
   select(qseqid, overlap_group, sseqid, pident, length, gene_target, everything()) %>%
   ungroup()
@@ -233,10 +234,10 @@ gvp_hits <- blastn_buoyancy_assemblies_unique_gene_QC %>%
 ##########################
 #Extract sequence regions#
 ##########################
-
-#for (seq in gvp_hits$qseqid_overlap) {
+#walk function 
+for (seq in gvp_hits$qseqid_overlap) {
 #Test: 
-seq <- gvp_hits$qseqid_overlap[1]
+#seq <- gvp_hits$qseqid_overlap[1]
 #GLAMR_sampleID, contig, overlap group
 
 SampleID <- gvp_hits %>%
@@ -290,7 +291,7 @@ names(region_to_write) <- paste0(query_name, "_", gene_target, "_qstart_", qstar
 # Write the contig to the new FASTA file
 writeXStringSet(region_to_write, output_fasta)
 
-#}
+}
 
 ```
 
