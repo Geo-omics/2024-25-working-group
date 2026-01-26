@@ -31,7 +31,6 @@ glamr_samples_pg <- tbl(pg, "glamr_samples") %>%
 2.) BLASTN assemblies to identify contigs that possess gvpA or gvpC (source - doi: https://doi.org/10.1038/nrmicro2834) 
 3.) Analyze BLASTN output, identify sequences of interest
 4.) Identify "best" hit and filter (50% cover / 80% ID of genes of interest)
-5.) Extract sequence hit regions for analysis
 
 1.) Assembly (metagenomic) path setup
 ```{r}
@@ -195,10 +194,11 @@ blastn_buoyancy_assemblies_id_overlap <- blastn_assemblies_results_vroom_add %>%
 
 #Take the *BEST* hit from each overlapping group - determined by e-value
 blastn_buoyancy_assemblies_best_hits <- blastn_buoyancy_assemblies_id_overlap %>%
-  group_by(qseqid, gene_target, overlap_group) %>%
-  arrange(evalue, -bitscore) %>% 
-  slice_min(evalue, n = 1, with_ties = FALSE) %>% # Keep only the hit with the lowest evalue
-  select(qseqid, overlap_group, sseqid, pident, length, gene_target, everything()) %>%
+  mutate(qseqid_overlap = paste0(qseqid, "_", overlap_group)) %>%
+  group_by(qseqid_overlap) %>%
+  arrange(evalue, desc(bitscore)) %>%
+  slice_min(evalue, n = 1, with_ties = FALSE) %>% # Keep only the hit with the lowest evalue, highest biscore (if evalue tied)
+  select(qseqid_overlap, qseqid, overlap_group, sseqid, pident, length, gene_target, everything()) %>%
   ungroup()
 
 #Make table of gvp gene lengths (for filtering results)
@@ -224,25 +224,23 @@ write.csv(blastn_buoyancy_assemblies_unique_gene_QC, file ="blast/blastn_buoyanc
 
 ```
 
-5.) Extract sequence hit regions for analysis
+4.) gvp - Extract sequence hit regions for analysis
 ```{r}
 
-gvp_hits <- blastn_buoyancy_assemblies_unique_gene_QC %>%
-              mutate(qseqid_overlap = paste0(qseqid, "_", overlap_group)) %>%
-              select(qseqid_overlap, everything())
+gvp_hits <- blastn_buoyancy_assemblies_unique_gene_QC 
 
 ##########################
 #Extract sequence regions#
 ##########################
-#walk function 
-for (seq in gvp_hits$qseqid_overlap) {
+
+#for (seq in gvp_hits$qseqid_overlap) {
 #Test: 
-#seq <- gvp_hits$qseqid_overlap[1]
+seq <- gvp_hits$qseqid_overlap[1]
 #GLAMR_sampleID, contig, overlap group
 
 SampleID <- gvp_hits %>%
                   filter(seq == qseqid_overlap) %>%
-                  pull(SampleID) 
+                  pull(SampleID)
 
 query_name <- gvp_hits %>%
                   filter(seq == qseqid_overlap) %>%
@@ -291,7 +289,7 @@ names(region_to_write) <- paste0(query_name, "_", gene_target, "_qstart_", qstar
 # Write the contig to the new FASTA file
 writeXStringSet(region_to_write, output_fasta)
 
-}
+#}
 
 ```
 
