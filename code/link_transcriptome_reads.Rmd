@@ -298,7 +298,7 @@ library(topGO)
 library(GO.db)
 
 # Run separately for the different GO ontologies
-current_ontology <- "BP"
+current_ontology <- "MF"
 
 # Get GO term definitions
 go <- keys(GO.db, keytype="GOID")
@@ -309,10 +309,12 @@ subset_go_xrefs <- GO_xrefs %>%
   left_join(go_annotations) %>% 
   filter(ONTOLOGY == current_ontology)
 
-gene_scores <- ifelse(deseq_res_df$log2FoldChange < -1, 
+# Identify differentially expressed genes
+gene_scores <- ifelse(deseq_res_df$log2FoldChange > 1, 
                       deseq_res_df$padj, 
                       1)
 names(gene_scores) <- deseq_res_df$locus_tag
+
 get_diff_genes <- function(scores_vec) {
   return(scores_vec < 0.05)
 }

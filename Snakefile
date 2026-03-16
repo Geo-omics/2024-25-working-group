@@ -802,3 +802,58 @@ rule kofam_scan_genome:
             --tmp-dir=/tmp/{wildcards.genome}_kofamscan \
             --ko-list {input.ko_list} {input.proteins} | tee {log}
         """
+
+
+rule antismash8_assembly:
+    input:
+        "data/antismash_assembly/{sample}/bakta_assembly", # bakta annotated assembly
+        genome = "data/antismash_assembly/{sample}/bakta_assembly/final.contigs.renamed.fna",
+    output:
+        dir = directory("data/antismash_assembly/{sample}/antismash8_assembly")
+    params:
+        db = "/nfs/turbo/lsa-gdick2/geomicro/data2/kiledal/GLAMR/data/reference/antismash8_mibig4",
+        genome = "data/antismash_assembly/{sample}/bakta_assembly/final.contigs.renamed.gbff"
+    conda: "config/conda/antismash8.yaml"
+    log: "logs/antismash8_assembly/{sample}.tsv"
+    benchmark: "benchmarks/antismash8_assembly/{sample}.tsv"
+    resources: cpus=1, mem_mb=100000, time_min=14400
+    priority: 5
+    shell:
+        """
+        antismash \
+            --cb-general --cb-knownclusters --cb-subclusters --asf --pfam2go --smcog-trees --cc-mibig --tfbs \
+            -t bacteria \
+            --databases {params.db} \
+            --output-dir {output.dir} \
+            --cpus {resources.cpus} \
+            --genefinding-tool none \
+            --no-abort-on-invalid-records \
+            {params.genome} | tee {log}
+
+            #--genefinding-tool error \
+            #--genefinding-gff3  \
+            #--genefinding-tool prodigal-m \
+            
+        """
+
+rule antismash_assembly_summary:
+    input:
+        "data/omics/{sample_type}/{sample}/antismash{version}_assembly"
+    output:
+        done = touch("data/omics/{sample_type}/{sample}/.done-antismash{version}_assembly_summary")
+    params:
+        count_script = "code/multismash/workflow/scripts/count_regions_single.py",
+        summarize_script = "code/multismash/workflow/scripts/tabulate_regions_single.py",
+        counts = "data/omics/{sample_type}/{sample}/antismash{version}_assembly/summaries/counts.tsv",
+        region_summary = "data/omics/{sample_type}/{sample}/antismash{version}_assembly/summaries/region_summary.tsv"
+    log: "logs/antismash_assembly_summary/AS{version}-{sample_type}-{sample}.tsv"
+    benchmark: "benchmarks/antismash_assembly_summary/AS{version}-{sample_type}-{sample}.tsv"
+    resources: cpus=1, mem_mb=16000, time_min=120 
+    priority: 6
+    shell:
+        """
+        mkdir -p $(dirname {params.counts})
+
+        python3 {params.count_script} {input} {params.counts} | tee {log}
+        python3 {params.summarize_script} {input} {params.region_summary} | tee -a {log}
+        """
