@@ -857,3 +857,30 @@ rule antismash_assembly_summary:
         python3 {params.count_script} {input} {params.counts} | tee {log}
         python3 {params.summarize_script} {input} {params.region_summary} | tee -a {log}
         """
+
+rule run_savont:
+    input: expand("data/savont/nanopore_16S/{sample_id}", sample_id = glob_wildcards("data/nanopore_16S/{sample_id}.fastq").sample_id)
+
+rule savont:
+    input:
+        fastq = "data/{data_type}/{sample_id}.fastq"
+    output:
+        outdir = directory("data/savont/{data_type}/{sample_id}"),
+        classifications = directory("data/savont/{data_type}/{sample_id}/classifications"),
+    params: 
+        silva_db = "data/reference/silva_db"
+    resources: cpus=8, mem_mb=16000, time_min=120 
+    conda: "config/conda/savont.yaml"
+    shell:
+        """
+        savont asv \
+            {input.fastq} \
+            -o {output.outdir} \
+            -t {resources.cpus}
+
+        savont classify \
+            -i {output.outdir} \
+            -o  {output.classifications} \
+            --silva-db {params.silva_db} \
+            -t {resources.cpus}
+        """
