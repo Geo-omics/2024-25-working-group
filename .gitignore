@@ -6,3 +6,4 @@
 benchmarks/*
 data/*
 logs/*
+log/*

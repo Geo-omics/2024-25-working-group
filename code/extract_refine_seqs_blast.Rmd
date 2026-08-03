@@ -35,8 +35,7 @@ glamr_samples_pg <- tbl(pg, "glamr_samples") %>%
   collect() 
 
 #set working directory
-here("/geomicro/data2/pdenuyl2/metagenomics_wg24/2024-25-working-group")
-
+knitr::opts_knit$set(root.dir = here::here("~/projects/2024_working_group/code"))
  
 ``` 
 
@@ -84,7 +83,10 @@ set41_subset <- rbind(set41_subset_i, set_41_samp_4400)
 assembly_paths <- tibble(sample = set41_subset$SampleID) %>%
                 mutate(read_path = str_glue("/geomicro/data2/kiledal/GLAMR/data/omics/metagenomes/{sample}/assembly/megahit_noNORM/final.contigs.renamed.fa"),
                        new_path = str_glue("../data/extract_refine_seqs_gvp/assembly/megahit_noNORM/{sample}_final.contigs.renamed.fa"))
-                                  
+
+# Create folders to link into                                  
+assembly_paths$new_path %>% dirname() %>% unique() %>%  fs::dir_create()
+
 #symbolic link read_paths
 file.symlink(assembly_paths$read_path, assembly_paths$new_path) 
 

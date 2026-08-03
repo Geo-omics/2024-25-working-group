@@ -40,6 +40,8 @@ input_df <- read_csv(file = "input_template_example3G.csv")
 
 input <- input_df %>%
                       filter(!is.na(location) | !is.na(lat) | !is.na(lon) )
+i = 1
+
 output <- input #make table for adding output results
 for (i in seq_len(nrow(input))) {
 sample_id <- input$SampleID[i]
