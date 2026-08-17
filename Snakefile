@@ -19,6 +19,27 @@ metaT_samples = glob_wildcards("data/transcriptomes/{sample}_fwd.fastq.gz").samp
 # Get a list of directions from fastq files
 directions = glob_wildcards("data/fastqs/{SampleID}_{direction}.fastq.gz").direction
 
+# Western Lake Erie metagenomes used for the inStrain strain-level example.
+# samp_447 = E20150029 (2015-08-10, station WE2), samp_450 = E20150032 (2015-08-10, WE14),
+# samp_475 = E20200030 (2020-07-28, WE9). 447 vs 450 is a same-day spatial pair; both vs 475 is across years.
+instrain_samples = ["samp_447", "samp_450", "samp_475"]
+
+# All Illumina metagenome samples in the GLAMR 2022_geomicro_JGI_CSP project (78 samples,
+# confirmed to all have decon_fwd/rev_reads_fastp.fastq.gz already present). Used to scale
+# inStrain profiling beyond the 3-sample example above. Deliberately profile+plot only --
+# instrain_compare is all-vs-all (78 samples = 3003 pairs) and its cost at this scale hasn't
+# been benchmarked yet, so it's kept out of run_instrain_profiles until that's tested.
+instrain_jgi_csp_samples = ["samp_447", "samp_448", "samp_449", "samp_450", "samp_451", "samp_452",
+    "samp_453", "samp_454", "samp_455", "samp_456", "samp_457", "samp_458", "samp_459", "samp_460",
+    "samp_461", "samp_462", "samp_463", "samp_464", "samp_465", "samp_466", "samp_467", "samp_468",
+    "samp_469", "samp_470", "samp_471", "samp_472", "samp_473", "samp_474", "samp_475", "samp_476",
+    "samp_477", "samp_478", "samp_479", "samp_480", "samp_481", "samp_482", "samp_483", "samp_484",
+    "samp_485", "samp_486", "samp_487", "samp_488", "samp_489", "samp_490", "samp_491", "samp_492",
+    "samp_493", "samp_494", "samp_495", "samp_496", "samp_497", "samp_498", "samp_499", "samp_500",
+    "samp_501", "samp_502", "samp_503", "samp_504", "samp_505", "samp_506", "samp_507", "samp_508",
+    "samp_509", "samp_510", "samp_511", "samp_512", "samp_513", "samp_514", "samp_515", "samp_516",
+    "samp_3935", "samp_3936", "samp_3937", "samp_3938", "samp_4304", "samp_4305", "samp_4306", "samp_4333"]
+
 # Create target rule for running fastqc
 rule run_fastqc:
     input: expand("data/fastqc/{SampleID}_{direction}_fastqc.html", SampleID = samples, direction = directions)
@@ -72,6 +93,19 @@ rule run_salmon:
 
 rule run_kofamscan_genome:
     input: expand("data/reference/genomes/GCF_002095975/GCF_002095975_kofam_results.txt")# GCF_002095975 is a specific genome, could replace with wildcard to map to multiple genomes
+
+rule run_instrain:
+    input:
+        expand("data/instrain/profile/{sample}.IS/.done", sample = instrain_samples),
+        expand("data/instrain/profile/{sample}.IS/.plotted", sample = instrain_samples),
+        "data/instrain/compare/microcystis_compare.IS/.done"
+
+# Profile+plot only, for all 78 Illumina metagenomes in 2022_geomicro_JGI_CSP -- no compare
+# (see instrain_jgi_csp_samples comment for why).
+rule run_instrain_profiles:
+    input:
+        expand("data/instrain/profile/{sample}.IS/.done", sample = instrain_jgi_csp_samples),
+        expand("data/instrain/profile/{sample}.IS/.plotted", sample = instrain_jgi_csp_samples)
 
 # Make a graph of all our rules
 rule make_rulegraph:
@@ -883,4 +917,260 @@ rule savont:
             -o  {output.classifications} \
             --silva-db {params.silva_db} \
             -t {resources.cpus}
+        """
+
+
+
+
+# Run checkm2 to get completeness/contamination for the Microcystis genomes
+rule instrain_checkm2:
+    input:
+        database = "/geomicro/data2/kiledal/GLAMR/data/reference/checkm2/CheckM2_database/uniref100.KO.1.dmnd"
+    output:
+        report = "data/instrain/checkm2/quality_report.tsv"
+    params:
+        # 269 Microcystis genomes: 196 NCBI RefSeq (GC*.fa) + 73 GLAMR MAGs (samp_*.fa).
+        genome_dir = "/nfs/turbo/lsa-gdick2/geomicro/data2/kiledal/projects/2023_WLE_complete_cyano_pangenomes/data/genomes/combined/Microcystis",
+        out_dir = "data/instrain/checkm2"
+    conda: "config/conda/checkm2.yaml"
+    log: "logs/instrain/checkm2.log"
+    benchmark: "benchmarks/instrain/checkm2.txt"
+    resources: cpus=16, mem_mb=64000, time_min=1440
+    shell:
+        """
+        rm -rf {params.out_dir} # checkm2 refuses to write into an existing directory
+
+        checkm2 predict \
+            --threads {resources.cpus} \
+            --input {params.genome_dir} \
+            --extension fa \
+            --database_path {input.database} \
+            --output-directory {params.out_dir} \
+            2>&1 | tee {log}
+        """
+
+# Reshape the checkm2 report into the CSV that dRep's --genomeInfo expects.
+# checkm2 gives Name/Completeness/Contamination with no file extension on Name;
+# dRep wants genome,completeness,contamination where genome is the basename WITH .fa
+rule instrain_genome_info:
+    input:
+        report = "data/instrain/checkm2/quality_report.tsv"
+    output:
+        genome_info = "data/instrain/drep_genomeInfo.csv"
+    log: "logs/instrain/genome_info.log"
+    resources: cpus=1, mem_mb=4000, time_min=30
+    shell:
+        """
+        awk -F'\\t' 'BEGIN{{OFS=","; print "genome","completeness","contamination"}} \
+            NR>1 {{print $1".fa", $2, $3}}' {input.report} > {output.genome_info}
+
+        printf "Wrote genome info for %s genomes\\n" "$(($(wc -l < {output.genome_info}) - 1))" | tee {log}
+        """
+
+# Dereplicate at 97% ANI, within inStrain's recommended 95-98% range.
+# Strict quality filtering (>=90% complete, <5% contaminated) better for instrain
+rule instrain_drep:
+    input:
+        genome_info = "data/instrain/drep_genomeInfo.csv"
+    output:
+        drep_done = touch("data/instrain/drep/.done"),
+        genome_dir = directory("data/instrain/drep/dereplicated_genomes")
+    params:
+        main_dir = "data/instrain/drep",
+        input_genomes = "/nfs/turbo/lsa-gdick2/geomicro/data2/kiledal/projects/2023_WLE_complete_cyano_pangenomes/data/genomes/combined/Microcystis/*.fa"
+    conda: "config/conda/drep.yaml"
+    log: "logs/instrain/drep.log"
+    benchmark: "benchmarks/instrain/drep.txt"
+    resources: cpus=24, mem_mb=100000, time_min=2880
+    shell:
+        """
+        rm -rf {params.main_dir} # Clear any old drep output
+
+        dRep dereplicate \
+            {params.main_dir} \
+            -p {resources.cpus} \
+            -pa 0.9 \
+            -sa 0.97 \
+            --length 50000 \
+            --completeness 90 \
+            --contamination 5 \
+            --genomeInfo {input.genome_info} \
+            -g {params.input_genomes} \
+            2>&1 | tee {log}
+        """
+
+# Concatenate the representative genomes into one fasta and write the scaffold-to-bin file.
+rule instrain_ref:
+    input:
+        genome_dir = "data/instrain/drep/dereplicated_genomes"
+    output:
+        fasta = "data/instrain/reference/microcystis_drep.fasta",
+        stb = "data/instrain/reference/microcystis_drep.stb"
+    log: "logs/instrain/ref.log"
+    resources: cpus=1, mem_mb=8000, time_min=60
+    shell:
+        """
+        rm -f {output.fasta}
+
+        for genome in {input.genome_dir}/*.fa; do
+            name=$(basename $genome .fa)
+            # Prefix the contig name and drop any description after the first whitespace (refseq headers can be long)
+            awk -v g="$name" '/^>/ {{sub(/^>/, ""); split($0, f, " "); print ">"g"__"f[1]; next}} {{print}}' \
+                $genome >> {output.fasta}
+        done
+
+        grep '^>' {output.fasta} | sed 's/^>//' | awk -F'__' 'BEGIN{{OFS="\\t"}} {{print $0, $1}}' > {output.stb}
+
+        printf "Reference: %s scaffolds from %s genomes\\n" \
+            "$(wc -l < {output.stb})" \
+            "$(cut -f2 {output.stb} | sort -u | wc -l)" | tee {log}
+        """
+
+# Predict genes so inStrain can report gene-level pN/pS and dN/dS (inStrain profile -g).
+rule instrain_ref_genes:
+    input:
+        fasta = "data/instrain/reference/microcystis_drep.fasta"
+    output:
+        genes_fna = "data/instrain/reference/microcystis_drep.genes.fna",
+        genes_faa = "data/instrain/reference/microcystis_drep.genes.faa"
+    conda: "config/conda/prodigal.yaml"
+    log: "logs/instrain/ref_genes.log"
+    benchmark: "benchmarks/instrain/ref_genes.txt"
+    resources: cpus=1, mem_mb=16000, time_min=1440
+    shell:
+        """
+        prodigal \
+            -i {input.fasta} \
+            -d {output.genes_fna} \
+            -a {output.genes_faa} \
+            -p meta \
+            2>&1 | tee {log}
+        """
+
+rule instrain_minibwa_index:
+    input:
+        fasta = "data/instrain/reference/microcystis_drep.fasta"
+    output:
+        # minibwa writes the index alongside the reference
+        l2b = "data/instrain/reference/microcystis_drep.fasta.l2b",
+        mbw = "data/instrain/reference/microcystis_drep.fasta.mbw"
+    conda: "config/conda/minibwa.yaml"
+    log: "logs/instrain/minibwa_index.log"
+    benchmark: "benchmarks/instrain/minibwa_index.txt"
+    resources: cpus=16, mem_mb=64000, time_min=240
+    shell:
+        """
+        minibwa index -t{resources.cpus} {input.fasta} 2>&1 | tee {log}
+        """
+
+# Link the GLAMR decon reads.
+rule link_instrain_reads:
+    output:
+        fwd_reads = "data/instrain/reads/{sample}_fwd.fastq.gz",
+        rev_reads = "data/instrain/reads/{sample}_rev.fastq.gz"
+    params:
+        glamr_dir = "/geomicro/data2/kiledal/GLAMR/data/omics/metagenomes/{sample}/reads"
+    resources: cpus=1, mem_mb=4000, time_min=30
+    shell:
+        """
+        ln -sf {params.glamr_dir}/decon_fwd_reads_fastp.fastq.gz {output.fwd_reads}
+        ln -sf {params.glamr_dir}/decon_rev_reads_fastp.fastq.gz {output.rev_reads}
+        """
+
+# Map with minibwa (bwa-mem successor; ~3x faster than bwa-mem).
+rule map_reads_for_instrain:
+    input:
+        fasta = "data/instrain/reference/microcystis_drep.fasta",
+        l2b = "data/instrain/reference/microcystis_drep.fasta.l2b",
+        mbw = "data/instrain/reference/microcystis_drep.fasta.mbw",
+        fwd_reads = "data/instrain/reads/{sample}_fwd.fastq.gz",
+        rev_reads = "data/instrain/reads/{sample}_rev.fastq.gz"
+    output:
+        bam = "data/instrain/bams/{sample}.bam",
+        bai = "data/instrain/bams/{sample}.bam.bai"
+    conda: "config/conda/minibwa.yaml"
+    log: "logs/instrain/map_reads/{sample}.log"
+    benchmark: "benchmarks/instrain/map_reads/{sample}.txt"
+    resources: cpus=16, mem_mb=48000, time_min=720
+    shell:
+        """
+        minibwa map \
+            -t{resources.cpus} \
+            {input.fasta} \
+            {input.fwd_reads} {input.rev_reads} \
+            2> {log} \
+            | samtools sort -@ {resources.cpus} -o {output.bam} -
+
+        samtools index -@ {resources.cpus} {output.bam}
+        """
+
+# --database_mode is inStrain's recommendation when most genomes in the collection are
+# absent from any given sample. It sets --min_genome_coverage 1, skips mm profiling, and
+# relaxes --min_read_ani from the 0.95 default to 0.92
+rule instrain_profile:
+    input:
+        bam = "data/instrain/bams/{sample}.bam",
+        bai = "data/instrain/bams/{sample}.bam.bai",
+        fasta = "data/instrain/reference/microcystis_drep.fasta",
+        stb = "data/instrain/reference/microcystis_drep.stb",
+        genes_fna = "data/instrain/reference/microcystis_drep.genes.fna"
+    output:
+        profile_done = touch("data/instrain/profile/{sample}.IS/.done")
+    params:
+        out_dir = "data/instrain/profile/{sample}.IS"
+    conda: "config/conda/instrain.yaml"
+    log: "logs/instrain/profile/{sample}.log"
+    benchmark: "benchmarks/instrain/profile/{sample}.txt"
+    resources: cpus=16, mem_mb=80000, time_min=2880
+    shell:
+        """
+        inStrain profile \
+            {input.bam} \
+            {input.fasta} \
+            -o {params.out_dir} \
+            -s {input.stb} \
+            -g {input.genes_fna} \
+            -p {resources.cpus} \
+            --database_mode \
+            2>&1 | tee {log}
+        """
+
+rule instrain_compare:
+    input:
+        profiles = expand("data/instrain/profile/{sample}.IS/.done", sample = instrain_samples),
+        stb = "data/instrain/reference/microcystis_drep.stb"
+    output:
+        compare_done = touch("data/instrain/compare/microcystis_compare.IS/.done")
+    params:
+        profile_dirs = expand("data/instrain/profile/{sample}.IS", sample = instrain_samples),
+        out_dir = "data/instrain/compare/microcystis_compare.IS"
+    conda: "config/conda/instrain.yaml"
+    log: "logs/instrain/compare.log"
+    benchmark: "benchmarks/instrain/compare.txt"
+    resources: cpus=16, mem_mb=120000, time_min=1440
+    shell:
+        """
+        inStrain compare \
+            -i {params.profile_dirs} \
+            -s {input.stb} \
+            -o {params.out_dir} \
+            -p {resources.cpus} \
+            --database_mode \
+            2>&1 | tee {log}
+        """
+
+rule instrain_plot:
+    input:
+        profile_done = "data/instrain/profile/{sample}.IS/.done"
+    output:
+        plot_done = touch("data/instrain/profile/{sample}.IS/.plotted")
+    params:
+        profile_dir = "data/instrain/profile/{sample}.IS"
+    conda: "config/conda/instrain.yaml"
+    log: "logs/instrain/plot/{sample}.log"
+    benchmark: "benchmarks/instrain/plot/{sample}.txt"
+    resources: cpus=4, mem_mb=32000, time_min=360
+    shell:
+        """
+        inStrain plot -i {params.profile_dir} 2>&1 | tee {log}
         """
